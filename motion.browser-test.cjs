@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Standalone acceptance runner. */
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const {chromium}=require(process.env.OFFICE_PLAYWRIGHT||'/home/hermes/apps/runflow/current/apps/web/node_modules/@playwright/test');
+const {chromium}=require(process.env.OFFICE_PLAYWRIGHT||'@playwright/test');
 const base=process.env.OFFICE_TEST_URL||'http://127.0.0.1:18133';
-const out=process.env.OFFICE_TEST_OUTPUT||'/home/hermes/.hermes/workspace/agent-office-deploy/ancient-motion';
+const out=process.env.OFFICE_TEST_OUTPUT||'./test-results/motion';
 fs.mkdirSync(out,{recursive:true});
 (async()=>{const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});const report={errors:[],url:base};
 try{const context=await browser.newContext({viewport:{width:1000,height:720},recordVideo:{dir:out,size:{width:1000,height:720}}});const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));await page.goto(base+'/?inspectScene=1',{waitUntil:'domcontentloaded',timeout:60000});await page.waitForSelector('canvas[data-motion-yesus]',{timeout:45000});
