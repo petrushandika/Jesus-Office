@@ -1,6 +1,8 @@
-# The Fellowship — Agent Office
+# Jesus-Office
 
-Private source for https://office.petrushandika.com.
+Source for Jesus-Office: https://github.com/petrushandika/Jesus-Office.
+
+Live demo: https://office.petrushandika.com.
 
 ## Experience
 
@@ -25,7 +27,7 @@ Use a Node version supporting `--experimental-strip-types` and Next.js 16. Envir
 
 ## Browser acceptance
 
-`office.browser-test.cjs` exercises the actual deployed WebGL page, all thirteen roster entries, selection, absence of project UI, API status, mobile width and reduced-motion preference. Set `OFFICE_TEST_URL`, `OFFICE_TEST_OUTPUT` and `OFFICE_PLAYWRIGHT` (path to your installed Playwright package). The fallback path is specific to the deployment host, not a portable dependency.
+`office.browser-test.cjs` exercises the actual deployed WebGL page, all thirteen roster entries, selection, absence of project UI, API status, mobile width and reduced-motion preference. Set `OFFICE_TEST_URL`, `OFFICE_TEST_OUTPUT` and `OFFICE_PLAYWRIGHT` (path to your installed Playwright package). Without an override, tests use a locally installed `@playwright/test` package and write evidence under `test-results/`.
 
 ```sh
 OFFICE_PLAYWRIGHT=/absolute/path/to/playwright OFFICE_TEST_URL=http://localhost:3000 node office.browser-test.cjs

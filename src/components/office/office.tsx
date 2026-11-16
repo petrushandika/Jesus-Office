@@ -18,7 +18,7 @@ export function Office() {
   return (
     <main className="min-h-dvh bg-[#191c1a] text-stone-200 lg:flex lg:h-dvh lg:flex-col lg:overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4 lg:px-8">
-        <div><p className="text-[10px] font-medium uppercase tracking-[0.3em] text-[#c6ad7b]">Agent Office</p><h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-100">The Fellowship</h1></div>
+        <div><p className="text-[10px] font-medium uppercase tracking-[0.3em] text-[#c6ad7b]">Jesus-Office</p><h1 className="mt-1 text-xl font-semibold tracking-tight text-stone-100">Jesus-Office</h1></div>
         <p className="text-xs tracking-wide text-stone-400">Yesus &amp; dua belas murid <span className="mx-2 text-stone-600">/</span> 13 penghuni</p>
       </header>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

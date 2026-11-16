@@ -86,7 +86,7 @@ test("limits desks to the ten most recent tasks", async () => {
 });
 
 test("reports an unavailable source instead of fabricating agents", async () => {
-  const snap = await readSnapshot({ dir: "/nonexistent/agent-office", gatewayFile: "/nonexistent/g.json", now: NOW });
+  const snap = await readSnapshot({ dir: "/nonexistent/jesus-office", gatewayFile: "/nonexistent/g.json", now: NOW });
   assert.equal(snap.available, false);
   assert.deepEqual(snap.agents, []);
 });
