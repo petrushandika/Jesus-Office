@@ -2,7 +2,7 @@
 
 ## Implemented brief
 
-The owner requested Jesus and twelve disciples in an animated 3D office, no project catalog in the UI, a private personal GitHub repository and public deployment. The existing office is being revised, not replaced with a marketing landing page.
+Jesus-Office is a public personal repository and a full-screen animated ancient-city map, not a marketing page or boxed dashboard. No project catalog or company branding. The requested eventual roster is one persona per verified owned agent; registry mapping remains unresolved and existing decorative personas must not be presented as verified agents.
 
 Latest approved direction: an ancient Judean town courtyard inspired by Nazareth/Jerusalem, not a modern office. Limestone houses, flat earthen roofs, timber doors, cloth awnings, amphorae, well and paving. Laptop coding stations are a deliberate artistic anachronism requested by the owner, not historical reconstruction. Matthias remains the twelfth disciple.
 
@@ -12,7 +12,7 @@ Latest approved direction: an ancient Judean town courtyard inspired by Nazareth
 - Materials: warm ivory stone, ochre timber, antique bronze details.
 - Accent: restrained parchment-gold; no pulsing neon or halos implying agent execution.
 - Typography: existing Geist UI fonts; names and operational statuses remain readable.
-- Layout: immersive orbitable 3D room plus accessible roster; mobile stacks scene and roster without horizontal scrolling.
+- Layout: edge-to-edge viewport canvas on every screen size. Floating map navigation and dismissible resident/runtime overlays never shrink the world. Camera pans and zooms through connected streets and neighborhoods; no enclosing diorama slab. Ambient environment and paired conversational gestures are explicitly decorative.
 
 ## Character requirements
 

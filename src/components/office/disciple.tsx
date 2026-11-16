@@ -6,6 +6,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Color, DoubleSide, Float32BufferAttribute, LatheGeometry, Shape, ShapeGeometry, Vector2, Vector3, type Group } from "three";
 import type { Persona } from "@/lib/personas";
 import { poseAt } from "@/lib/choreography";
+import { socialPoseAt } from "@/lib/social-choreography";
 
 type Props = {
   persona: Persona;
@@ -72,6 +73,8 @@ export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, sel
   const lastSit = useRef(-1);
   const point = useMemo(() => new Vector3(), []);
   const head = useRef<Group>(null);
+  const speech = useRef<Group>(null);
+  const dots = useRef<Group>(null);
   const elapsed = useRef(0);
   useEffect(() => {
     probe.current = new URLSearchParams(window.location.search).get("inspectScene") === "1";
@@ -100,11 +103,15 @@ export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, sel
     if (document.hidden) return;
     if (!reducedMotion) elapsed.current += Math.min(delta, 0.1);
     const pose = reducedMotion ? poseAt(4) : poseAt(elapsed.current, phaseOffset);
+    const social = socialPoseAt(reducedMotion ? 0 : elapsed.current, Math.round((phaseOffset-5)/1.7));
     if (!reducedMotion || !initialized.current) {
       initialized.current = true;
       if (traveler.current) traveler.current.position.z = pose.travel;
       if (body.current) body.current.position.y = -0.30 * pose.sit + pose.bob;
-      if (head.current) head.current.rotation.x = pose.sit * 0.12;
+      if (body.current) body.current.rotation.y = social.turn * 0.35;
+      if (head.current) { head.current.rotation.x = pose.sit * 0.12; head.current.rotation.y = social.turn * 0.65; }
+      if (speech.current) { speech.current.visible = social.amount > 0.05 && !reducedMotion; speech.current.scale.setScalar(social.amount); }
+      if (dots.current) dots.current.children.forEach((dot,i)=>{dot.position.y=Math.sin(elapsed.current*5+i)*0.035;});
       for (const [foot, lift, stride] of [[leftFoot, pose.leftFoot, pose.leftStride], [rightFoot, pose.rightFoot, pose.rightStride]] as const) {
         if (!foot.current) continue;
         foot.current.position.y = 0.065 + lift;
@@ -114,7 +121,9 @@ export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, sel
       for (const [arm, forearm, hand, swing, tap] of [[leftArm, leftForearm, leftHand, pose.leftArm, pose.leftHand], [rightArm, rightForearm, rightHand, pose.rightArm, pose.rightHand]] as const) {
         if (arm.current) arm.current.rotation.x = -0.95 * pose.sit + swing;
         if (forearm.current) forearm.current.rotation.x = -0.28 - 0.72 * pose.sit + tap * 0.45;
-        if (hand.current) hand.current.rotation.x = 0.38 * pose.sit + tap;
+        if (hand.current) hand.current.rotation.x = 0.38 * pose.sit + tap * (1-social.amount);
+        if (arm.current) { arm.current.rotation.x += social.gesture * 0.65; arm.current.rotation.z = (arm===leftArm?1:-1)*social.gesture*0.7; }
+        if (forearm.current) forearm.current.rotation.x -= social.gesture*0.6;
       }
       // Lift the hem while the torso lowers, draping linen over seated knees.
       if (lastSit.current !== pose.sit) {
@@ -143,6 +152,9 @@ export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, sel
       const worldPosition = (ref: RefObject<Group | null>) => ref.current ? ref.current.getWorldPosition(point).toArray() : null;
       gl.domElement.setAttribute(`data-motion-${persona.id}`, JSON.stringify({
         phase: pose.phase, z: traveler.current.position.z,
+        conversing: speech.current?.visible ?? false,
+        speechVisible: speech.current?.visible ?? false,
+        turn: head.current?.rotation.y ?? 0, gesture: leftArm.current?.rotation.z ?? 0,
         sit: Math.max(0, Math.min(1, -body.current.position.y / 0.30)),
         leftHand: worldPosition(leftHand), rightHand: worldPosition(rightHand),
         leftFoot: worldPosition(leftFoot), rightFoot: worldPosition(rightFoot),
@@ -156,6 +168,11 @@ export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, sel
       onPointerOver={(event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; }}
       onPointerOut={() => { document.body.style.cursor = ""; }}>
       <group ref={traveler} name="station-travel">
+      <group ref={speech} position={[0,2.7,0]} visible={false}>
+        <mesh scale={[0.48,0.22,0.14]}><sphereGeometry args={[1,12,8]}/><meshStandardMaterial color="#fff1ce" roughness={1}/></mesh>
+        <mesh position={[0, -0.22,0]} rotation={[0,0,Math.PI]}><coneGeometry args={[0.09,0.2,3]}/><meshStandardMaterial color="#fff1ce"/></mesh>
+        <group ref={dots} position={[0,0,-0.14]}>{[-1,0,1].map(i=><mesh key={i} position={[i*0.17,0,0]}><sphereGeometry args={[0.045,8,6]}/><meshBasicMaterial color="#756448"/></mesh>)}</group>
+      </group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
         <ringGeometry args={[0.55, selected ? 0.6 : 0.565, 40]} />
         <meshBasicMaterial color={selected ? "#b77b3d" : "#c7bca5"} transparent opacity={selected ? 0.9 : 0.32} />

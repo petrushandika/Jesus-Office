@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, OrthographicCamera } from "@react-three/drei";
-import { Color, DoubleSide, Object3D, Shape, type Group, type InstancedMesh } from "three";
+import { OrbitControls } from "@react-three/drei";
+import { Color, DoubleSide, MOUSE, Object3D, Shape, type Group, type InstancedMesh } from "three";
 import type { Agent } from "@/lib/agents";
 import { PERSONAS, type Persona } from "@/lib/personas";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { Disciple } from "./disciple";
 import { poseAt } from "@/lib/choreography";
 
-type Props = { agents: Agent[]; selected: string | null; onSelect: (id: string | null) => void };
+export type CameraAction = { kind: "zoom-in" | "zoom-out" | "reset" | "north" | "south" | "east" | "west"; serial: number };
+export type Props = {
+  agents: Agent[];
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  cameraAction?: CameraAction;
+  inspectScene?: boolean;
+};
+const MAP_WORLD = { minX: -45, maxX: 45, minZ: -35, maxZ: 35 };
 type Point = [number, number, number];
 const STONE = ["#cbb994", "#deceb0", "#d4c19f", "#e3d4b5", "#c6b18d"];
 // 4 / 5 / 4, with Jesus at the exact center. Origins are seated positions.
@@ -21,7 +29,7 @@ function Block({ at, size, color = "#a47b4d", rotation = 0 }: { at: Point; size:
 }
 
 // All repeated stonework shares one draw call per section; no downloaded assets.
-function Stones({ blocks }: { blocks: { at: Point; size: Point; tint?: number }[] }) {
+function Stones({ blocks, palette = STONE }: { blocks: { at: Point; size: Point; tint?: number }[]; palette?: string[] }) {
   const ref = useRef<InstancedMesh>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -29,21 +37,81 @@ function Stones({ blocks }: { blocks: { at: Point; size: Point; tint?: number }[
     blocks.forEach(({ at, size, tint }, i) => {
       dummy.position.set(...at); dummy.scale.set(...size); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
       ref.current!.setMatrixAt(i, dummy.matrix);
-      ref.current!.setColorAt(i, new Color(STONE[tint ?? i % STONE.length]));
+      ref.current!.setColorAt(i, new Color(palette[tint ?? i % palette.length]));
     });
     ref.current.instanceMatrix.needsUpdate = true;
     if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true;
     ref.current.computeBoundingSphere();
-  }, [blocks]);
+  }, [blocks, palette]);
   return <instancedMesh ref={ref} args={[undefined, undefined, blocks.length]} castShadow receiveShadow><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial roughness={1} /></instancedMesh>;
 }
 
-function ResponsiveCamera() {
-  const size = useThree((s) => s.size);
-  // Both axes include the complete 18 x 17 m stage and roofs, also on portrait screens.
-  return <OrthographicCamera makeDefault position={[0, 19, -25]} near={0.1} far={100}
-    zoom={Math.min(size.width / 19.5, size.height / 15.5)} />;
+// Three's camera/renderer are imperative objects, not immutable React state.
+/* eslint-disable react-hooks/immutability */
+function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; inspectScene: boolean; paused: boolean }) {
+  const { camera, size, gl, invalidate } = useThree();
+  const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
+  const consumed = useRef<number | null>(null);
+  // Fill portrait as well as wide viewports instead of fitting a boxed stage.
+  const baseZoom = Math.max(size.width / 34, size.height / 34);
+  const previousZoom = useRef<number | null>(null);
+  const publish = useCallback(() => {
+    if (!inspectScene || !controls.current) return;
+    gl.domElement.dataset.mapCamera = JSON.stringify({ zoom: camera.zoom, target: controls.current.target.toArray(), position: camera.position.toArray() });
+  }, [inspectScene, gl, camera]);
+  useEffect(() => {
+    camera.zoom = previousZoom.current === null ? baseZoom : camera.zoom * baseZoom / previousZoom.current;
+    previousZoom.current = baseZoom;
+    camera.updateProjectionMatrix();
+    publish(); invalidate();
+  }, [baseZoom, camera, invalidate, publish]);
+  useEffect(() => {
+    if (!inspectScene) return;
+    gl.domElement.dataset.mapWorld = JSON.stringify(MAP_WORLD);
+    publish();
+    return () => {
+      delete gl.domElement.dataset.mapCamera;
+      delete gl.domElement.dataset.mapWorld;
+    };
+  }, [inspectScene, gl, publish]);
+  useEffect(() => {
+    const orbit = controls.current;
+    if (!action || !orbit || consumed.current === action.serial) return;
+    consumed.current = action.serial;
+    if (action.kind === "reset") {
+      orbit.target.set(0, 0, 0);
+      camera.position.set(0, 26, -32);
+      camera.zoom = baseZoom;
+    } else if (action.kind === "zoom-in" || action.kind === "zoom-out") {
+      camera.zoom = Math.max(baseZoom * 0.85, Math.min(baseZoom * 3.5, camera.zoom * (action.kind === "zoom-in" ? 1.25 : 0.8)));
+    } else {
+      const step = Math.min(6, size.height / camera.zoom * 0.18);
+      const dx = action.kind === "east" ? -step : action.kind === "west" ? step : 0;
+      const dz = action.kind === "north" ? step : action.kind === "south" ? -step : 0;
+      orbit.target.x += dx; orbit.target.z += dz;
+      camera.position.x += dx; camera.position.z += dz;
+    }
+    camera.updateProjectionMatrix(); orbit.update(); publish(); invalidate();
+  }, [action, baseZoom, camera, invalidate, size.height, publish]);
+  return <OrbitControls ref={controls} makeDefault target={[0, 0, 0]} enablePan enableZoom
+    enableRotate={false} mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }} screenSpacePanning={false} minZoom={baseZoom * 0.85} maxZoom={baseZoom * 3.5}
+    enableDamping={!paused} dampingFactor={0.12} onChange={() => {
+      const orbit = controls.current;
+      if (orbit) {
+        // Keep the navigable map inside the continuous terrain, not the old courtyard box.
+        const limitX = Math.max(0, Math.min(22, MAP_WORLD.maxX - size.width / camera.zoom / 2 - 1));
+        const groundPitch = 26 / Math.hypot(26, 32);
+        const limitZ = Math.max(0, Math.min(16, MAP_WORLD.maxZ - size.height / camera.zoom / groundPitch / 2 - 1));
+        const x = Math.max(-limitX, Math.min(limitX, orbit.target.x));
+        const z = Math.max(-limitZ, Math.min(limitZ, orbit.target.z));
+        camera.position.x += x - orbit.target.x; camera.position.z += z - orbit.target.z;
+        orbit.target.x = x; orbit.target.z = z;
+      }
+      publish();
+    }} />;
 }
+
+/* eslint-enable react-hooks/immutability */
 
 function Amphora({ at, scale = 1 }: { at: Point; scale?: number }) {
   return <group position={at} scale={scale}>
@@ -55,14 +123,31 @@ function Amphora({ at, scale = 1 }: { at: Point; scale?: number }) {
   </group>;
 }
 
-function Olive({ at }: { at: Point }) {
-  return <group position={at}>
+function Breeze({ animated, phase = 0, water = false, children }: { animated: boolean; phase?: number; water?: boolean; children: React.ReactNode }) {
+  const ref = useRef<Group>(null);
+  const elapsed = useRef(phase);
+  useFrame((_, delta) => {
+    if (!animated || document.hidden || !ref.current) return;
+    elapsed.current += Math.min(delta, 0.1);
+    if (water) {
+      const scale = 1 + Math.sin(elapsed.current * 0.9) * 0.06;
+      ref.current.scale.set(scale, 1, scale);
+    } else {
+      ref.current.rotation.z = Math.sin(elapsed.current * 0.8) * 0.012;
+      ref.current.rotation.x = Math.sin(elapsed.current * 0.55) * 0.008;
+    }
+  });
+  return <group ref={ref} name={water ? "environment-water" : "environment-breeze"}>{children}</group>;
+}
+
+function Olive({ at, animated }: { at: Point; animated: boolean }) {
+  return <group position={at}><Breeze animated={animated} phase={at[0] + at[2]}>
     <mesh position={[0, 1, 0]} rotation={[0, 0, 0.13]} castShadow><cylinderGeometry args={[0.075, 0.14, 2, 7]} /><meshStandardMaterial color="#77654c" roughness={1} /></mesh>
     {[-1, 1].map((s) => <group key={s} position={[s * 0.35, 1.65, 0]} rotation={[0, s, s * -0.5]}>
       <mesh castShadow><cylinderGeometry args={[0.035, 0.07, 1.1, 6]} /><meshStandardMaterial color="#77654c" roughness={1} /></mesh>
       <mesh position={[0, 0.5, 0]} scale={[0.65, 0.7, 0.5]} castShadow><icosahedronGeometry args={[1, 1]} /><meshStandardMaterial color={s === 1 ? "#7c8860" : "#96a078"} roughness={1} flatShading /></mesh>
     </group>)}
-  </group>;
+  </Breeze></group>;
 }
 
 function House({ x, z, width, height, depth }: { x: number; z: number; width: number; height: number; depth: number }) {
@@ -115,23 +200,26 @@ function Gateway() {
   </group>;
 }
 
-function Awning({ x }: { x: number }) {
+function Awning({ x, animated }: { x: number; animated: boolean }) {
   return <group position={[x, 0, 5.9]}>
     {[-1, 1].map((s) => <Block key={s} at={[s * 1.35, 1.16, -0.5]} size={[0.075, 2.32, 0.075]} color="#73583b" />)}
     <Block at={[0, 2.33, -0.5]} size={[2.85, 0.09, 0.09]} color="#73583b" />
-    {Array.from({ length: 14 }, (_, i) => <mesh key={i} position={[-1.3 + i * 0.2, 2.49 + Math.sin(i * 0.9) * 0.018, 0.02]} rotation={[-0.22, 0, 0]} castShadow>
+    <Breeze animated={animated} phase={x}>{Array.from({ length: 14 }, (_, i) => <mesh key={i} position={[-1.3 + i * 0.2, 2.49 + Math.sin(i * 0.9) * 0.018, 0.02]} rotation={[-0.22, 0, 0]} castShadow>
       <boxGeometry args={[0.205, 0.035, 1.25]} /><meshStandardMaterial color={i % 4 === 0 ? "#967b58" : "#c8b38a"} roughness={1} side={DoubleSide} />
-    </mesh>)}
+    </mesh>)}</Breeze>
   </group>;
 }
 
-function Well() {
+function Well({ animated }: { animated: boolean }) {
   const blocks = useMemo(() => Array.from({ length: 36 }, (_, i) => {
     const a = (i % 12) * Math.PI / 6 + Math.floor(i / 12) * 0.13;
     return { at: [Math.cos(a) * 0.56, 0.14 + Math.floor(i / 12) * 0.25, Math.sin(a) * 0.56] as Point, size: [0.29, 0.23, 0.28] as Point };
   }), []);
   return <group position={[-7, 0, -0.8]} name="courtyard-well">
     <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}><circleGeometry args={[0.55, 16]} /><meshStandardMaterial color="#393d31" roughness={1} /></mesh>
+    <Breeze animated={animated} water>
+      {[0.22, 0.4].map((radius) => <mesh key={radius} position={[0, 0.125, 0]} rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[radius, radius + 0.018, 24]} /><meshStandardMaterial color="#8eaaa0" transparent opacity={0.55} roughness={0.3} /></mesh>)}
+    </Breeze>
     <Stones blocks={blocks} />
     {[-0.8, 0.8].map((x) => <Block key={x} at={[x, 1.1, 0]} size={[0.12, 2.2, 0.12]} color="#756044" />)}
     <Block at={[0, 2.15, 0]} size={[1.85, 0.15, 0.15]} color="#655037" />
@@ -140,14 +228,102 @@ function Well() {
   </group>;
 }
 
-function Courtyard() {
+const TIMBER = ["#69543a", "#453a2b", "#866a47"];
+function OuterHomes({ homes }: { homes: { x: number; z: number; width: number; height: number; depth: number }[] }) {
+  const { masonry, timber } = useMemo(() => {
+    const masonry: { at: Point; size: Point; tint?: number }[] = [];
+    const timber: { at: Point; size: Point; tint?: number }[] = [];
+    homes.forEach(({ x, z, width, height, depth }, index) => {
+      const rows = Math.ceil(height / 0.45);
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < 5; col++) masonry.push({
+          at: [x - width / 2 + (col + 0.5) * width / 5, (row + 0.5) * height / rows, z],
+          size: [width / 5 - 0.025, height / rows - 0.025, depth], tint: (index + row + col) % 5,
+        });
+      }
+      masonry.push({ at: [x, height + 0.08, z], size: [width + 0.2, 0.16, depth + 0.2], tint: 0 });
+      for (const face of [-1, 1]) {
+        timber.push({ at: [x - width * 0.2, 0.85, z + face * (depth / 2 + 0.035)], size: [0.8, 1.7, 0.07], tint: 1 });
+        timber.push({ at: [x + width * 0.25, height * 0.67, z + face * (depth / 2 + 0.04)], size: [0.65, 0.65, 0.08], tint: 1 });
+        for (const offset of [-0.3, 0.3]) timber.push({ at: [x + width * offset, height - 0.1, z + face * (depth / 2 + 0.1)], size: [0.13, 0.13, 0.4], tint: 0 });
+      }
+    });
+    return { masonry, timber };
+  }, [homes]);
+  return <group name="instanced-city-homes"><Stones blocks={masonry} /><Stones blocks={timber} palette={TIMBER} /></group>;
+}
+
+function EnvironmentProbe({ paused }: { paused: boolean }) {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  const elapsed = useRef(0);
+  useFrame((_, delta) => {
+    if (!paused && !document.hidden) elapsed.current += Math.min(delta, 0.1);
+    gl.domElement.setAttribute("data-map-environment", JSON.stringify({ elapsed: elapsed.current, paused,
+      treeSway: scene.getObjectByName("environment-breeze")?.rotation.z ?? 0,
+      waterScale: scene.getObjectByName("environment-water")?.scale.x ?? 1 }));
+  });
+  useEffect(() => () => gl.domElement.removeAttribute("data-map-environment"), [gl]);
+  return null;
+}
+
+function CityDistricts({ animated }: { animated: boolean }) {
+  const streets = useMemo(() => {
+    const blocks: { at: Point; size: Point; tint: number }[] = [];
+    // Continuous lanes extend beyond the central paving in all four directions.
+    for (const x of [-21, -11, 0, 11, 21]) {
+      for (let z = -32; z <= 32; z += 1.4) {
+        if (Math.abs(x) < 9 && Math.abs(z) < 8.5) continue;
+        blocks.push({ at: [x, -0.025, z], size: [2.8, 0.035, 1.32], tint: 1 });
+      }
+    }
+    for (const z of [-22, -11, 11, 22]) {
+      for (let x = -39; x <= 39; x += 1.4) {
+        if ([-21, -11, 0, 11, 21].some((lane) => Math.abs(x - lane) < 2)) continue;
+        blocks.push({ at: [x, -0.024, z], size: [1.32, 0.035, 2.6], tint: 2 });
+      }
+    }
+    return blocks;
+  }, []);
+  const homes = useMemo(() => {
+    const result: { x: number; z: number; width: number; depth: number; height: number }[] = [];
+    for (const z of [-27, -17, -6, 5, 16, 27]) {
+      for (const x of [-28, -16, -5, 5, 16, 28]) {
+        if (Math.abs(z) < 12 && Math.abs(x) < 12) continue;
+        // The near-side homes stay low so the character courtyard remains readable.
+        result.push({ x: x + Math.sin(z + x) * 0.6, z, width: 3.4 + Math.abs(Math.sin(x)) * 1.4,
+          depth: 3 + Math.abs(Math.cos(z)) * 1.3, height: z < 0 ? 1.8 + Math.abs(Math.sin(x + z)) * 0.8 : 2.5 + Math.abs(Math.sin(x + z)) * 1.8 });
+      }
+    }
+    return result;
+  }, []);
+  return <group name="ancient-city-neighborhoods">
+    <Stones blocks={streets} />
+    <OuterHomes homes={homes} />
+    {/* Olive orchards follow the outer lanes; the central workspace stays open. */}
+    {[-1, 1].flatMap((side) => Array.from({ length: 12 }, (_, i) => <Olive key={`${side}:${i}`}
+      at={[side * (33 + (i % 2) * 4), 0, -25 + Math.floor(i / 2) * 9]} animated={animated} />))}
+    {[-1, 1].flatMap((side) => [-8, 0, 8, 16].map((z) => <group key={`${side}:${z}`} position={[side * 11, 0, z - 5.9]}>
+      <Awning x={0} animated={animated} />
+      <Block at={[0, 0.62, 5.9]} size={[2.5, 1.24, 0.75]} color="#9b7750" />
+      {[-0.8, 0, 0.8].map((x) => <Amphora key={x} at={[x, 1.24, 5.9]} scale={0.48} />)}
+    </group>))}
+    {/* Low garden beds give the city a cultivated edge without sealing it in walls. */}
+    {[-1, 1].map((side) => <group key={side}>
+      <Block at={[side * 27, -0.015, 0]} size={[4.5, 0.06, 7]} color="#9e9e71" />
+      {[-2, 0, 2].map((z) => <Block key={z} at={[side * 27, 0.035, z]} size={[3.8, 0.08, 0.4]} color="#7d875b" />)}
+    </group>)}
+  </group>;
+}
+
+function Courtyard({ animated }: { animated: boolean }) {
   const paving = useMemo(() => Array.from({ length: 25 * 24 }, (_, i) => {
     const r = Math.floor(i / 25), c = i % 25;
     return { at: [-8.65 + c * 0.71 + (r % 2) * 0.12, -0.035 + Math.sin(i * 17) * 0.008, -7.6 + r * 0.69] as Point,
       size: [0.65 + Math.sin(i) * 0.025, 0.065, 0.62 + Math.cos(i) * 0.025] as Point, tint: i % 5 };
   }), []);
   return <group name="ancient-judean-courtyard">
-    <Block at={[0, -0.18, 0.5]} size={[18, 0.28, 17]} color="#a99069" />
+    <Block at={[0, -0.18, 0]} size={[90, 0.28, 70]} color="#c4ac83" />
     <Stones blocks={paving} />
     <House x={-4.65} z={7.3} width={5.8} height={3.15} depth={2.4} />
     <House x={4.65} z={7.3} width={5.8} height={3.65} depth={2.4} />
@@ -155,11 +331,11 @@ function Courtyard() {
     {/* Low peripheral houses leave the central 12 m completely unobstructed. */}
     <House x={-8.1} z={3.55} width={1.65} height={1.65} depth={4.8} />
     <House x={8.1} z={3.55} width={1.65} height={1.85} depth={4.8} />
-    <Awning x={-4.7} /><Awning x={4.7} />
+    <Awning x={-4.7} animated={animated} /><Awning x={4.7} animated={animated} />
     {Array.from({ length: 6 }, (_, i) => <Block key={i} at={[6.9, (i + 1) * 0.15, 5.25 + i * 0.25]} size={[0.75, (i + 1) * 0.3, 0.3]} color={STONE[i % 5]} />)}
-    <Olive at={[-7.1, 0, -5.8]} /><Olive at={[7.1, 0, -5.7]} />
+    <Olive at={[-7.1, 0, -5.8]} animated={animated} /><Olive at={[7.1, 0, -5.7]} animated={animated} />
     <Amphora at={[6.4, 0, 5.8]} /><Amphora at={[-6.3, 0, 5.7]} scale={0.85} /><Amphora at={[7.2, 0, 0.4]} scale={1.1} />
-    <Well />
+    <Well animated={animated} />
     {/* A subtle stone rosette centers the composition, not a supernatural effect. */}
     <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow><circleGeometry args={[1.12, 12]} /><meshStandardMaterial color="#e0c99a" roughness={1} /></mesh>
   </group>;
@@ -233,7 +409,8 @@ function CodingStation({ persona, position, animated, index }: { persona: Person
 }
 
 // Artistic coding is explicitly DEMO scenery, independent of the real agents prop.
-export default function OfficeScene({ selected, onSelect }: Props) {
+export default function OfficeScene({ selected, onSelect, cameraAction, inspectScene: inspectOverride }: Props) {
+  const [inspectScene] = useState(() => inspectOverride ?? new URLSearchParams(window.location.search).get('inspectScene') === '1');
   const reducedMotion = useReducedMotion();
   const [visible, setVisible] = useState(true);
   useEffect(() => {
@@ -243,7 +420,7 @@ export default function OfficeScene({ selected, onSelect }: Props) {
   }, []);
   const paused = reducedMotion || !visible;
   return <Canvas orthographic shadows dpr={[1, 1.5]} frameloop={paused ? "demand" : "always"}
-    camera={{ position: [0, 19, -25], zoom: 35, near: 0.1, far: 100 }}
+    camera={{ position: [0, 26, -32], zoom: 35, near: 0.1, far: 180 }}
     gl={{ antialias: true, powerPreference: "low-power" }} onPointerMissed={() => onSelect(null)}
     aria-label="Ancient Judean city courtyard inspired by Nazareth and Jerusalem, with 13 characters: Jesus and twelve disciples. Laptop coding is an animated demo, not live agent work.">
     <color attach="background" args={["#eee0c6"]} />
@@ -251,15 +428,14 @@ export default function OfficeScene({ selected, onSelect }: Props) {
     <directionalLight position={[-7, 14, -8]} color="#ffe2ac" intensity={2.5} castShadow shadow-mapSize={[1024, 1024]}
       shadow-camera-left={-13} shadow-camera-right={13} shadow-camera-top={14} shadow-camera-bottom={-12}
       shadow-camera-near={0.1} shadow-camera-far={50} shadow-normalBias={0.04} shadow-bias={-0.0002} />
-    <Courtyard />
+    <Courtyard animated={!paused} />
+    <CityDistricts animated={!paused} />
     {PERSONAS.map((persona, index) => <group key={persona.id}>
       <CodingStation persona={persona} position={STATIONS[index]} animated={!paused} index={index} />
       <Disciple persona={persona} position={STATIONS[index]} rotation={0} phaseOffset={index * 1.7 + 5}
         selected={selected === persona.id} reducedMotion={paused} onSelect={onSelect} />
     </group>)}
-    <ResponsiveCamera />
-    <OrbitControls makeDefault target={[0, 1.1, 0.5]} enablePan={false} enableZoom={false}
-      minAzimuthAngle={Math.PI - 0.12} maxAzimuthAngle={Math.PI + 0.12}
-      minPolarAngle={0.84} maxPolarAngle={0.99} enableDamping={!paused} />
+    <MapCamera action={cameraAction} inspectScene={inspectScene} paused={paused} />
+    {inspectScene && <EnvironmentProbe paused={paused} />}
   </Canvas>;
 }
