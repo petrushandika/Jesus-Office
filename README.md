@@ -4,6 +4,12 @@ Source for Jesus-Office: https://github.com/petrushandika/Jesus-Office.
 
 Live demo: https://office.petrushandika.com.
 
+## Full-screen city map
+
+The 3D world fills the viewport on desktop and mobile. Drag to explore, scroll/pinch to zoom, or use the labelled map controls. Resident and runtime panels are dismissible overlays; they never reduce the canvas. Decorative conversations and environmental motion are not live agent messages.
+
+Run `map.browser-test.cjs` with the same browser test environment variables to verify viewport coverage, navigation and overlays.
+
 ## Experience
 
 Thirteen original stylized 3D personas: Jesus and twelve disciples, using Matthias in place of Judas Iscariot. Robed figures, distinct garment palettes, hair and silhouettes, articulated walking, sitting and typing cycles, an ancient Judean village courtyard inspired by Nazareth/Jerusalem, orbit controls and an accessible roster. Artistic interpretation, not historical likeness or religious authority.
