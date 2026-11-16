@@ -8,7 +8,7 @@ import type { Agent } from "@/lib/agents";
 import { PERSONAS, type Persona } from "@/lib/personas";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { Disciple } from "./disciple";
-import { poseAt } from "@/lib/choreography";
+import { ROOMS, roomFor, type Room } from "@/lib/room-choreography";
 
 export type CameraAction = { kind: "zoom-in" | "zoom-out" | "reset" | "north" | "south" | "east" | "west"; serial: number };
 export type Props = {
@@ -21,8 +21,7 @@ export type Props = {
 const MAP_WORLD = { minX: -45, maxX: 45, minZ: -35, maxZ: 35 };
 type Point = [number, number, number];
 const STONE = ["#cbb994", "#deceb0", "#d4c19f", "#e3d4b5", "#c6b18d"];
-// 4 / 5 / 4, with Jesus at the exact center. Origins are seated positions.
-const STATIONS: Point[] = [[0, 0, 0], [-3.75, 0, 3.8], [-1.25, 0, 3.8], [1.25, 0, 3.8], [3.75, 0, 3.8], [-5, 0, 0], [-2.5, 0, 0], [2.5, 0, 0], [5, 0, 0], [-3.75, 0, -3.8], [-1.25, 0, -3.8], [1.25, 0, -3.8], [3.75, 0, -3.8]];
+
 
 function Block({ at, size, color = "#a47b4d", rotation = 0 }: { at: Point; size: Point; color?: string; rotation?: number }) {
   return <mesh position={at} rotation={[0, rotation, 0]} castShadow receiveShadow><boxGeometry args={size} /><meshStandardMaterial color={color} roughness={1} /></mesh>;
@@ -303,7 +302,7 @@ function CityDistricts({ animated }: { animated: boolean }) {
     {/* Olive orchards follow the outer lanes; the central workspace stays open. */}
     {[-1, 1].flatMap((side) => Array.from({ length: 12 }, (_, i) => <Olive key={`${side}:${i}`}
       at={[side * (33 + (i % 2) * 4), 0, -25 + Math.floor(i / 2) * 9]} animated={animated} />))}
-    {[-1, 1].flatMap((side) => [-8, 0, 8, 16].map((z) => <group key={`${side}:${z}`} position={[side * 11, 0, z - 5.9]}>
+    {[-1, 1].flatMap((side) => [-8, 0, 8, 16].map((z) => <group key={`${side}:${z}`} position={[side * 14, 0, z - 5.9]}>
       <Awning x={0} animated={animated} />
       <Block at={[0, 0.62, 5.9]} size={[2.5, 1.24, 0.75]} color="#9b7750" />
       {[-0.8, 0, 0.8].map((x) => <Amphora key={x} at={[x, 1.24, 5.9]} scale={0.48} />)}
@@ -325,6 +324,7 @@ function Courtyard({ animated }: { animated: boolean }) {
   return <group name="ancient-judean-courtyard">
     <Block at={[0, -0.18, 0]} size={[90, 0.28, 70]} color="#c4ac83" />
     <Stones blocks={paving} />
+    <group position={[0, 0, 12]}>
     <House x={-4.65} z={7.3} width={5.8} height={3.15} depth={2.4} />
     <House x={4.65} z={7.3} width={5.8} height={3.65} depth={2.4} />
     <Gateway />
@@ -336,6 +336,7 @@ function Courtyard({ animated }: { animated: boolean }) {
     <Olive at={[-7.1, 0, -5.8]} animated={animated} /><Olive at={[7.1, 0, -5.7]} animated={animated} />
     <Amphora at={[6.4, 0, 5.8]} /><Amphora at={[-6.3, 0, 5.7]} scale={0.85} /><Amphora at={[7.2, 0, 0.4]} scale={1.1} />
     <Well animated={animated} />
+    </group>
     {/* A subtle stone rosette centers the composition, not a supernatural effect. */}
     <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow><circleGeometry args={[1.12, 12]} /><meshStandardMaterial color="#e0c99a" roughness={1} /></mesh>
   </group>;
@@ -385,17 +386,8 @@ function CodeScreen({ animated, phase }: { animated: boolean; phase: number }) {
 
 function CodingStation({ persona, position, animated, index }: { persona: Persona; position: Point; animated: boolean; index: number }) {
   const h = persona.height;
-  const bench = useRef<Group>(null);
-  const elapsed = useRef(0);
-  useFrame((_, delta) => {
-    if (document.hidden) return;
-    if (animated) elapsed.current += Math.min(delta, 0.1);
-    const pose = animated ? poseAt(elapsed.current, index * 1.7 + 5) : poseAt(4);
-    // Pull the stool from the side only after arrival: keep the walking lane clear.
-    if (bench.current) bench.current.position.x = 0.96 * (1 - pose.sit);
-  });
-  return <group name={`coding-station:${persona.id}`} position={position}>
-    <group ref={bench}>
+  return <group name={`coding-station:${persona.id}`} position={position} rotation={[0, roomFor(persona.id).facing, 0]}>
+    <group position={[-1, 0, 1.4]}>
       <Block at={[0, 0.52, -0.035]} size={[0.82, 0.1, 0.34]} color="#947044" />
       {[-0.29, 0.29].map((x) => <Block key={x} at={[x, 0.25, -0.035]} size={[0.1, 0.5, 0.25]} color="#745337" />)}
     </group>
@@ -405,6 +397,31 @@ function CodingStation({ persona, position, animated, index }: { persona: Person
     {/* Small key rows remain discernible, but carry no fabricated task output. */}
     {[0, 1, 2, 3].map((r) => <Block key={r} at={[0, 1.05 * h, 0.5 + r * 0.065]} size={[0.68, 0.008, 0.025]} color="#a9ae96" />)}
     <group position={[0, h + 0.32, 0.9]} rotation={[0.18, 0, 0]}><CodeScreen animated={animated} phase={index * 1.7} /></group>
+  </group>;
+}
+
+function WorkRoom({ room, index }: { room: Room; index: number }) {
+  const side = Math.sign(room.center[2]);
+  return <group position={room.center} name={`work-room:${room.id}`} userData={{ title: room.title }}>
+    <Block at={[0, 0.005, 0]} size={[5.6, 0.07, 5]} color={room.tint} />
+    {/* Open roof, low cutaway masonry; a real 1.8m doorway faces the central lane. */}
+    <Block at={[0, 0.64, side * 2.5]} size={[5.7, 1.28, 0.24]} color="#d6c5a5" />
+    {[-1, 1].map(s => <group key={s}>
+      <Block at={[s * 2.8, 0.54, 0]} size={[0.22, 1.08, 5]} color="#cdbb99" />
+      <Block at={[s * 1.85, 0.46, -side * 2.5]} size={[1.9, 0.92, 0.24]} color="#dfcfaf" />
+      <Block at={[s * 0.95, 0.72, -side * 2.5]} size={[0.18, 1.44, 0.3]} color="#bca27b" />
+    </group>)}
+    <Block at={[0, 0.04, -side * 2.5]} size={[1.8, 0.06, 0.5]} color="#e6d6b5" />
+    {/* Role-specific fixed work objects: council map, plans, code, review tiles, specimens, planning board, scrolls. */}
+    <group position={[-1.9, 0, side * 1.25]}>
+      <Block at={[0, 0.62, 0]} size={[1.05, 0.12, 0.8]} color="#94734b" />
+      {[-0.4, 0.4].map(x => <Block key={x} at={[x, 0.3, 0]} size={[0.1, 0.6, 0.65]} color="#785a3d" />)}
+      {index === 4 ? <Amphora at={[0, 0.68, 0]} scale={0.7} /> : index === 6 ?
+        [-0.3, 0, 0.3].map(x => <mesh key={x} position={[x, 0.77, 0]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.1, 0.1, 0.55, 8]} /><meshStandardMaterial color="#ead6ab" roughness={1} /></mesh>) :
+        <><Block at={[0, 0.7, 0]} size={[0.9, 0.025, 0.66]} color="#eadbb9" />
+        {Array.from({ length: index === 3 ? 6 : 3 }, (_, i) => <Block key={i} at={[-0.3+(i%3)*0.28, 0.76, -0.2+Math.floor(i/3)*0.28]} size={[0.17, index === 1 ? 0.2 : 0.06, 0.16]} color={index === 3 ? '#8b6550' : '#8c9c8e'} />)}</>}
+    </group>
+    <Amphora at={[2.25, 0, side * 1.75]} scale={0.65} />
   </group>;
 }
 
@@ -422,7 +439,7 @@ export default function OfficeScene({ selected, onSelect, cameraAction, inspectS
   return <Canvas orthographic shadows dpr={[1, 1.5]} frameloop={paused ? "demand" : "always"}
     camera={{ position: [0, 26, -32], zoom: 35, near: 0.1, far: 180 }}
     gl={{ antialias: true, powerPreference: "low-power" }} onPointerMissed={() => onSelect(null)}
-    aria-label="Ancient Judean city courtyard inspired by Nazareth and Jerusalem, with 13 characters: Jesus and twelve disciples. Laptop coding is an animated demo, not live agent work.">
+    aria-label="Ancient open-roof rooms with seven visual team personas walking between work areas. Decorative role choreography, not live agent assignments.">
     <color attach="background" args={["#eee0c6"]} />
     <hemisphereLight args={["#fff2d6", "#a7a27d", 2.1]} />
     <directionalLight position={[-7, 14, -8]} color="#ffe2ac" intensity={2.5} castShadow shadow-mapSize={[1024, 1024]}
@@ -430,9 +447,11 @@ export default function OfficeScene({ selected, onSelect, cameraAction, inspectS
       shadow-camera-near={0.1} shadow-camera-far={50} shadow-normalBias={0.04} shadow-bias={-0.0002} />
     <Courtyard animated={!paused} />
     <CityDistricts animated={!paused} />
+    <Block at={[0, -0.005, 0]} size={[25, 0.04, 2.5]} color="#ddc8a3" />
+    {ROOMS.map((room, index) => <WorkRoom key={room.id} room={room} index={index} />)}
     {PERSONAS.map((persona, index) => <group key={persona.id}>
-      <CodingStation persona={persona} position={STATIONS[index]} animated={!paused} index={index} />
-      <Disciple persona={persona} position={STATIONS[index]} rotation={0} phaseOffset={index * 1.7 + 5}
+      <CodingStation persona={persona} position={roomFor(persona.id).home} animated={!paused} index={index} />
+      <Disciple persona={persona} position={roomFor(persona.id).home} rotation={0}
         selected={selected === persona.id} reducedMotion={paused} onSelect={onSelect} />
     </group>)}
     <MapCamera action={cameraAction} inspectScene={inspectScene} paused={paused} />

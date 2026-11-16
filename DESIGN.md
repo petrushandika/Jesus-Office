@@ -1,27 +1,18 @@
 # Jesus-Office
 
-## Implemented brief
+## Approved experience
+Full-viewport ancient Judean city inspired by Nazareth/Jerusalem, not a boxed dashboard. No arrow buttons, resident-name lists, telemetry panels, project catalog or company branding. Pan by dragging; zoom by wheel/pinch. Keyboard equivalents remain on the focusable map. Selected role appears only after character interaction, without a name card.
 
-Jesus-Office is a public personal repository and a full-screen animated ancient-city map, not a marketing page or boxed dashboard. No project catalog or company branding. The requested eventual roster is one persona per verified owned agent; registry mapping remains unresolved and existing decorative personas must not be presented as verified agents.
+## Role-based visual team
+Seven original characters: Yesus leads; Petrus handles architecture; Yohanes is senior engineer; Yakobus handles QA/security; Andreas research; Filipus planning; Matius technical writing. These are visual roles based on the known team, not newly created or verified live agents.
 
-Latest approved direction: an ancient Judean town courtyard inspired by Nazareth/Jerusalem, not a modern office. Limestone houses, flat earthen roofs, timber doors, cloth awnings, amphorae, well and paving. Laptop coding stations are a deliberate artistic anachronism requested by the owner, not historical reconstruction. Matthias remains the twelfth disciple.
+Open-roof workrooms and clear door gaps surround connected circulation lanes. Desks stay in rooms; characters walk between rooms rather than carrying their workstation or teleporting. Gait, facing, seated work and conversations remain visible. Room routes use deterministic waypoints with continuity tests.
 
-## Tokens
+## Materials
+Warm limestone, ochre timber, parchment and olive foliage. Original procedural robed human figures with distinct silhouettes and garments. Laptops deliberately remain an artistic anachronism; no historical likeness or religious authority is claimed.
 
-- Background: warm near-black / charcoal.
-- Materials: warm ivory stone, ochre timber, antique bronze details.
-- Accent: restrained parchment-gold; no pulsing neon or halos implying agent execution.
-- Typography: existing Geist UI fonts; names and operational statuses remain readable.
-- Layout: edge-to-edge viewport canvas on every screen size. Floating map navigation and dismissible resident/runtime overlays never shrink the world. Camera pans and zooms through connected streets and neighborhoods; no enclosing diorama slab. Ambient environment and paired conversational gestures are explicitly decorative.
-
-## Character requirements
-
-Thirteen persistent personas even with no recorded work. Jesus has cream robe and muted red mantle; the twelve vary in garment colors, body proportions, facial hair and hair silhouette. Original procedural geometry, not recolored robot assets. A staggered walk–sit–type–stand–return cycle drives actual root, feet, shoulder and wrist transforms. Reduced-motion preference freezes a coding pose; hidden documents pause the cycle. Selection uses persona IDs and must be possible from keyboard-accessible buttons.
-
-## Truth boundary
-
-Personas are not assigned to arbitrary worker runs. Hermes telemetry remains separate and retains actual run IDs/status/heartbeat when available. Animation is visual, not evidence of work. No project catalog or repository names are included in the client interface.
+## Truth and accessibility
+Simulation is labelled. No background runtime polling from the map; decorative actions do not claim actual task execution or agent messages. Reduced-motion freezes character/environment animation; hidden documents pause. The focusable map supports arrow keys, +/- zoom, 0 reset, Enter role selection, Escape deselection. No hidden focusable dashboard controls.
 
 ## Verification
-
-Source checks + persona count/IDs, production build, real WebGL browser desktop/mobile capture, click selection, absence of project UI, reduced-motion check, secret scan, matching GitHub SHA and deployed release. VPS software-renderer checks do not establish hardware-device frame-rate guarantees.
+Tests cover seven roles, continuous connected routes, actual rendered world displacement, room transitions and reduced-motion freeze. Browser checks cover 1440x900,1280x800,390x844 viewport fill, absence of dashboard UI, drag/zoom/keyboard navigation and runtime errors. Inspect actual screenshots for walls/furniture intersections. VPS software WebGL results do not establish user-device FPS.

@@ -9,7 +9,7 @@ fs.mkdirSync(out,{recursive:true});
 try{const context=await browser.newContext({viewport:{width:1000,height:720},recordVideo:{dir:out,size:{width:1000,height:720}}});const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));await page.goto(base+'/?inspectScene=1',{waitUntil:'domcontentloaded',timeout:60000});await page.waitForSelector('canvas[data-motion-yesus]',{timeout:45000});
 const sample=()=>page.evaluate(()=>Object.fromEntries(Array.from(document.querySelector('canvas').attributes).filter(a=>a.name.startsWith('data-motion-')).map(a=>[a.name.slice(12),JSON.parse(a.value)])));
 const frames=[];for(let i=0;i<24;i++){frames.push(await sample());await page.waitForTimeout(500)}
-report.personas=Object.keys(frames[0]);assert.equal(report.personas.length,13);
+report.personas=Object.keys(frames[0]);assert.equal(report.personas.length,7);
 report.movingHands=report.personas.filter(id=>new Set(frames.filter(f=>f[id].phase==='coding').map(f=>JSON.stringify([f[id].leftHand,f[id].rightHand]))).size>2);
 report.walking=report.personas.filter(id=>new Set(frames.map(f=>f[id].z)).size>2);
 assert.ok(report.movingHands.length>=5,'multiple coding hand transforms must change');assert.ok(report.walking.length>=1,'actual root translation must change');
