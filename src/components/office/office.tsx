@@ -24,7 +24,7 @@ export function Office() {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section aria-label="Ruang office 3D" className="relative h-[58vh] min-h-[360px] w-full shrink-0 overflow-hidden bg-[#eee8da] lg:h-auto lg:min-h-0 lg:flex-1">
           <OfficeScene agents={snapshot?.agents ?? []} selected={selected} onSelect={setSelected} />
-          <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-stone-400/20 bg-stone-50/90 px-3 py-1.5 text-[10px] tracking-wider text-stone-600">STUDIO · REPRESENTASI ARTISTIK</div>
+          <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-stone-400/20 bg-stone-50/90 px-3 py-1.5 text-[10px] tracking-wider text-stone-600">PELATARAN KOTA KUNO · INTERPRETASI ARTISTIK</div>
           <p className="pointer-events-none absolute bottom-4 left-4 right-4 w-fit rounded-md bg-stone-50/90 px-3 py-2 text-[11px] text-stone-700">Geser untuk melihat ruang · pilih karakter atau nama</p>
         </section>
         <aside className="flex w-full shrink-0 flex-col border-t border-white/10 lg:w-[320px] lg:overflow-y-auto lg:border-l lg:border-t-0">
@@ -45,7 +45,7 @@ export function Office() {
               </li>)}
             </ol>
           </nav>
-          <p className="border-t border-white/10 px-5 py-4 text-[11px] leading-relaxed text-stone-500">Animasi adalah suasana visual, bukan status pekerjaan agent. Versi ini memakai Matias sebagai pengganti Yudas Iskariot.</p>
+          <p className="border-t border-white/10 px-5 py-4 text-[11px] leading-relaxed text-stone-500">Berjalan, duduk, dan mengetik adalah animasi artistik, bukan bukti pekerjaan agent. Terinspirasi Nazaret/Yerusalem kuno; laptop sengaja anakronistis. Matias menggantikan Yudas Iskariot.</p>
           <details className="border-t border-white/10 px-5 py-4">
             <summary className="cursor-pointer text-xs font-medium text-stone-300 focus-visible:outline-2 focus-visible:outline-[#d3bd92]">Telemetri Hermes</summary>
             <div className="mt-3 space-y-3 text-[11px] text-stone-400" aria-live="polite">

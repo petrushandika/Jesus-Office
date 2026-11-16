@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 
-import { Color, DoubleSide, LatheGeometry, Shape, Vector2, type Group } from "three";
+import { Color, DoubleSide, Float32BufferAttribute, LatheGeometry, Shape, ShapeGeometry, Vector2, Vector3, type Group } from "three";
 import type { Persona } from "@/lib/personas";
+import { poseAt } from "@/lib/choreography";
 
 type Props = {
   persona: Persona;
   position: [number, number, number];
   rotation?: number;
+  phaseOffset?: number;
   selected: boolean;
   reducedMotion: boolean;
   onSelect: (id: string) => void;
@@ -24,37 +26,58 @@ function lathe(profile: number[][]) {
   return new LatheGeometry(profile.map(([x, y]) => new Vector2(x, y)), 20);
 }
 
-function Arm({ side, robe, skin, gesture }: { side: number; robe: string; skin: string; gesture: boolean }) {
+function Arm({ side, robe, skin, arm, forearm, hand }: { side: number; robe: string; skin: string; arm: RefObject<Group | null>; forearm: RefObject<Group | null>; hand: RefObject<Group | null> }) {
   return (
-    <group position={[side * 0.27, 1.43, 0]} rotation={[gesture ? -0.16 : 0.04, 0, side * 0.17]}>
+    <group ref={arm} name={side < 0 ? "left-arm" : "right-arm"} position={[side * 0.27, 1.43, 0]}>
       <mesh position={[0, -0.17, 0]} castShadow>
         <capsuleGeometry args={[0.135, 0.24, 4, 10]} />
         <meshStandardMaterial color={robe} roughness={0.94} />
       </mesh>
-      <group name="elbow" position={[0, -0.35, 0]} rotation={[gesture ? -0.9 : -0.28, 0, -side * 0.13]}>
+      <group ref={forearm} name={side < 0 ? "left-elbow" : "right-elbow"} position={[0, -0.35, 0]}>
         <mesh position={[0, -0.105, 0]} castShadow>
           <capsuleGeometry args={[0.105, 0.18, 4, 10]} />
           <meshStandardMaterial color={robe} roughness={0.94} />
         </mesh>
-        <mesh position={[0, -0.29, 0.015]} scale={[0.075, 0.115, 0.065]} castShadow>
+        <group ref={hand} name={side < 0 ? "left-wrist" : "right-wrist"} position={[0, -0.29, 0.015]}>
+        <mesh scale={[0.075, 0.115, 0.065]} castShadow>
           <sphereGeometry args={[1, 10, 8]} />
           <meshStandardMaterial color={skin} roughness={0.8} />
         </mesh>
-        <mesh position={[-side * 0.065, -0.265, 0.045]} rotation={[0.3, 0, side * 0.5]}>
+        <mesh position={[-side * 0.065, 0.025, 0.03]} rotation={[0.3, 0, side * 0.5]}>
           <capsuleGeometry args={[0.026, 0.065, 3, 6]} />
           <meshStandardMaterial color={skin} roughness={0.8} />
         </mesh>
+        </group>
       </group>
     </group>
   );
 }
 
-export function Disciple({ persona, position, rotation = 0, selected, reducedMotion, onSelect }: Props) {
+export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, selected, reducedMotion, onSelect }: Props) {
   const body = useRef<Group>(null);
-  const shoulders = useRef<Group>(null);
+  const traveler = useRef<Group>(null);
+  const leftFoot = useRef<Group>(null);
+  const rightFoot = useRef<Group>(null);
+  const leftArm = useRef<Group>(null);
+  const rightArm = useRef<Group>(null);
+  const leftForearm = useRef<Group>(null);
+  const rightForearm = useRef<Group>(null);
+  const leftHand = useRef<Group>(null);
+  const rightHand = useRef<Group>(null);
+  const folds = useRef<Group>(null);
+  const { gl } = useThree();
+  const probe = useRef(false);
+  const lastProbe = useRef(-1);
+  const initialized = useRef(false);
+  const lastSit = useRef(-1);
+  const point = useMemo(() => new Vector3(), []);
   const head = useRef<Group>(null);
   const elapsed = useRef(0);
-  const focal = persona.id === "yesus";
+  useEffect(() => {
+    probe.current = new URLSearchParams(window.location.search).get("inspectScene") === "1";
+    const attribute = `data-motion-${persona.id}`;
+    return () => gl.domElement.removeAttribute(attribute);
+  }, [gl, persona.id]);
   const sculpt = useMemo(() => {
     const mantle = new Shape();
     mantle.moveTo(-0.31, 1.49);
@@ -62,20 +85,69 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
     mantle.quadraticCurveTo(-0.09, 0.16, 0.1, 0.3);
     mantle.bezierCurveTo(-0.08, 0.7, -0.02, 1.09, 0.23, 1.49);
     mantle.quadraticCurveTo(-0.01, 1.66, -0.31, 1.49);
-    return { robe: lathe(ROBE_PROFILE), head: lathe(HEAD_PROFILE), beard: lathe(BEARD_PROFILE), mantle };
+    const robe = lathe(ROBE_PROFILE);
+    const mantleGeometry = new ShapeGeometry(mantle, 10);
+    return { robe, head: lathe(HEAD_PROFILE), beard: lathe(BEARD_PROFILE), mantle: mantleGeometry,
+      robeRest: robe.getAttribute("position").array.slice(), mantleRest: mantleGeometry.getAttribute("position").array.slice() };
   }, []);
   useEffect(() => () => {
     sculpt.robe.dispose();
     sculpt.head.dispose();
     sculpt.beard.dispose();
+    sculpt.mantle.dispose();
   }, [sculpt]);
-  useFrame((_, delta) => {
-    if (reducedMotion || document.hidden) return;
-    elapsed.current += Math.min(delta, 0.05);
-    const phase = elapsed.current * 0.85 + position[0];
-    if (body.current) body.current.scale.y = 1 + Math.sin(phase) * 0.004;
-    if (shoulders.current) shoulders.current.rotation.x = Math.sin(phase * 0.65) * 0.018;
-    if (head.current) head.current.rotation.y = Math.sin(phase * 0.4) * 0.035;
+  useFrame((state, delta) => {
+    if (document.hidden) return;
+    if (!reducedMotion) elapsed.current += Math.min(delta, 0.1);
+    const pose = reducedMotion ? poseAt(4) : poseAt(elapsed.current, phaseOffset);
+    if (!reducedMotion || !initialized.current) {
+      initialized.current = true;
+      if (traveler.current) traveler.current.position.z = pose.travel;
+      if (body.current) body.current.position.y = -0.30 * pose.sit + pose.bob;
+      if (head.current) head.current.rotation.x = pose.sit * 0.12;
+      for (const [foot, lift, stride] of [[leftFoot, pose.leftFoot, pose.leftStride], [rightFoot, pose.rightFoot, pose.rightStride]] as const) {
+        if (!foot.current) continue;
+        foot.current.position.y = 0.065 + lift;
+        foot.current.position.z = 0.05 + stride + pose.sit * 0.2;
+        foot.current.rotation.x = -stride * 0.8;
+      }
+      for (const [arm, forearm, hand, swing, tap] of [[leftArm, leftForearm, leftHand, pose.leftArm, pose.leftHand], [rightArm, rightForearm, rightHand, pose.rightArm, pose.rightHand]] as const) {
+        if (arm.current) arm.current.rotation.x = -0.95 * pose.sit + swing;
+        if (forearm.current) forearm.current.rotation.x = -0.28 - 0.72 * pose.sit + tap * 0.45;
+        if (hand.current) hand.current.rotation.x = 0.38 * pose.sit + tap;
+      }
+      // Lift the hem while the torso lowers, draping linen over seated knees.
+      if (lastSit.current !== pose.sit) {
+        lastSit.current = pose.sit;
+        for (const [geometry, rest] of [[sculpt.robe, sculpt.robeRest], [sculpt.mantle, sculpt.mantleRest]] as const) {
+          const vertices = geometry.getAttribute("position") as Float32BufferAttribute;
+          for (let i = 0; i < vertices.count; i++) {
+            const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2];
+            const lower = Math.max(0, 1 - y / 1.05);
+            vertices.setXYZ(i, x, y + 0.30 * pose.sit * lower, z + pose.sit * Math.sin(Math.min(1, y / 1.05) * Math.PI) * 0.27);
+          }
+          vertices.needsUpdate = true;
+          geometry.computeVertexNormals();
+        }
+        if (folds.current) {
+          folds.current.position.y = pose.sit * 0.13;
+          folds.current.position.z = pose.sit * 0.22;
+          folds.current.scale.y = 1 - pose.sit * 0.2;
+        }
+      }
+    }
+    if (!reducedMotion) initialized.current = false;
+    if (probe.current && state.clock.elapsedTime - lastProbe.current >= 0.2 && traveler.current && body.current) {
+      lastProbe.current = state.clock.elapsedTime;
+      traveler.current.updateWorldMatrix(true, true);
+      const worldPosition = (ref: RefObject<Group | null>) => ref.current ? ref.current.getWorldPosition(point).toArray() : null;
+      gl.domElement.setAttribute(`data-motion-${persona.id}`, JSON.stringify({
+        phase: pose.phase, z: traveler.current.position.z,
+        sit: Math.max(0, Math.min(1, -body.current.position.y / 0.30)),
+        leftHand: worldPosition(leftHand), rightHand: worldPosition(rightHand),
+        leftFoot: worldPosition(leftFoot), rightFoot: worldPosition(rightFoot),
+      }));
+    }
   });
   const fold = new Color(persona.robe).multiplyScalar(0.84).getStyle();
   return (
@@ -83,13 +155,14 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
       onClick={(event) => { event.stopPropagation(); onSelect(persona.id); }}
       onPointerOver={(event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; }}
       onPointerOut={() => { document.body.style.cursor = ""; }}>
+      <group ref={traveler} name="station-travel">
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
         <ringGeometry args={[0.55, selected ? 0.6 : 0.565, 40]} />
         <meshBasicMaterial color={selected ? "#b77b3d" : "#c7bca5"} transparent opacity={selected ? 0.9 : 0.32} />
       </mesh>
       <group scale={[persona.build, persona.height, persona.build]}>
         {[-1, 1].map((side) => (
-          <group key={side} position={[side * 0.16, 0.065, 0.05]}>
+          <group key={side} ref={side < 0 ? leftFoot : rightFoot} name={side < 0 ? "left-foot" : "right-foot"} position={[side * 0.16, 0.065, 0.05]}>
             <mesh scale={[0.11, 0.045, 0.205]} castShadow>
               <sphereGeometry args={[1, 12, 8]} />
               <meshStandardMaterial color="#664936" roughness={0.95} />
@@ -109,23 +182,24 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
             <meshStandardMaterial color={persona.robe} roughness={0.97} />
           </mesh>
           {/* Raised, tapered seams catch sunlight like hand-worked linen. */}
+          <group ref={folds} name="seated-linen-folds">
           {[-0.22, -0.08, 0.08, 0.22].map((x) => (
             <mesh key={x} position={[x, 0.61, 0.21 - Math.abs(x) * 0.13]} rotation={[0, 0, -x * 0.22]} scale={[0.018, 0.43, 0.025]}>
               <sphereGeometry args={[1, 6, 8]} />
               <meshStandardMaterial color={fold} roughness={1} />
             </mesh>
           ))}
+          </group>
           <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 1.02, 0]} scale={[1, 0.73, 1]}>
             <torusGeometry args={[0.252, 0.026, 5, 24]} />
             <meshStandardMaterial color="#a58b63" roughness={1} />
           </mesh>
-          <mesh position={[0, 0, 0.245]} castShadow>
-            <shapeGeometry args={[sculpt.mantle, 10]} />
+          <mesh geometry={sculpt.mantle} position={[0, 0, 0.245]} castShadow>
             <meshStandardMaterial color={persona.mantle} roughness={0.95} side={DoubleSide} />
           </mesh>
-          <group ref={shoulders}>
-            <Arm side={-1} robe={persona.robe} skin={persona.skin} gesture={focal} />
-            <Arm side={1} robe={persona.robe} skin={persona.skin} gesture={focal || persona.hairStyle === "bald"} />
+          <group name="articulated-shoulders">
+            <Arm side={-1} robe={persona.robe} skin={persona.skin} arm={leftArm} forearm={leftForearm} hand={leftHand} />
+            <Arm side={1} robe={persona.robe} skin={persona.skin} arm={rightArm} forearm={rightForearm} hand={rightHand} />
           </group>
           <mesh position={[0, 1.62, 0]}>
             <capsuleGeometry args={[0.105, 0.15, 4, 10]} />
@@ -176,7 +250,9 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
           </group>
         </group>
       </group>
+      </group>
       {/* Accessible selected name lives in the DOM sidebar; ring marks the 3D figure. */}
     </group>
   );
 }
+

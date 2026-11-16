@@ -4,7 +4,7 @@ Private source for https://office.petrushandika.com.
 
 ## Experience
 
-Thirteen original stylized 3D personas: Jesus and twelve disciples, using Matthias in place of Judas Iscariot. Robed figures, distinct garment palettes, hair and silhouettes, articulated ambient gestures, a warm office, orbit controls and an accessible roster. Artistic interpretation, not historical likeness or religious authority.
+Thirteen original stylized 3D personas: Jesus and twelve disciples, using Matthias in place of Judas Iscariot. Robed figures, distinct garment palettes, hair and silhouettes, articulated walking, sitting and typing cycles, an ancient Judean village courtyard inspired by Nazareth/Jerusalem, orbit controls and an accessible roster. Artistic interpretation, not historical likeness or religious authority.
 
 Character animation does **not** claim that an AI worker is executing a task. Real sanitized Hermes telemetry is separate. No arbitrary persona-to-worker assignment is implied. Reduced-motion preferences are respected.
 
@@ -30,6 +30,8 @@ Use a Node version supporting `--experimental-strip-types` and Next.js 16. Envir
 ```sh
 OFFICE_PLAYWRIGHT=/absolute/path/to/playwright OFFICE_TEST_URL=http://localhost:3000 node office.browser-test.cjs
 ```
+
+`motion.browser-test.cjs` records real WebGL video and samples actual rendered character transforms under `?inspectScene=1`, checking translated positions, alternating typing hands, and reduced-motion freeze. Code displays are decorative loops, not real project source or execution evidence. Laptops are a deliberate anachronism within the ancient setting.
 
 ## Deployment
 

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "The Fellowship — Agent Office",
-  description: "Kantor 3D Yesus dan dua belas murid dengan animasi artistik dan telemetri Hermes terpisah.",
+  description: "Pelataran kota kuno bersama Yesus dan dua belas murid: animasi berjalan, duduk, dan ngoding dengan telemetri Hermes terpisah.",
 };
 
 export const viewport: Viewport = {

@@ -4,7 +4,7 @@
 
 The owner requested Jesus and twelve disciples in an animated 3D office, no project catalog in the UI, a private personal GitHub repository and public deployment. The existing office is being revised, not replaced with a marketing landing page.
 
-Working interpretation for this release: contemporary Mediterranean materials, warm stone and timber, respectful stylized original robed figures. Matthias is the twelfth disciple. These are artistic interpretations, not historical portraits. Exact visual style and roster can be revised.
+Latest approved direction: an ancient Judean town courtyard inspired by Nazareth/Jerusalem, not a modern office. Limestone houses, flat earthen roofs, timber doors, cloth awnings, amphorae, well and paving. Laptop coding stations are a deliberate artistic anachronism requested by the owner, not historical reconstruction. Matthias remains the twelfth disciple.
 
 ## Tokens
 
@@ -16,7 +16,7 @@ Working interpretation for this release: contemporary Mediterranean materials, w
 
 ## Character requirements
 
-Thirteen persistent personas even with no recorded work. Jesus has cream robe and muted red mantle; the twelve vary in garment colors, body proportions, facial hair and hair silhouette. Original procedural geometry, not recolored robot assets. Ambient articulated gestures and breathing stop under reduced-motion preference or hidden document. Selection uses persona IDs and must be possible from keyboard-accessible buttons.
+Thirteen persistent personas even with no recorded work. Jesus has cream robe and muted red mantle; the twelve vary in garment colors, body proportions, facial hair and hair silhouette. Original procedural geometry, not recolored robot assets. A staggered walk–sit–type–stand–return cycle drives actual root, feet, shoulder and wrist transforms. Reduced-motion preference freezes a coding pose; hidden documents pause the cycle. Selection uses persona IDs and must be possible from keyboard-accessible buttons.
 
 ## Truth boundary
 
