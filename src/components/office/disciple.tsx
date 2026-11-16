@@ -5,8 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 
 import { Color, DoubleSide, Float32BufferAttribute, LatheGeometry, Shape, ShapeGeometry, Vector2, Vector3, type Group } from "three";
 import type { Persona } from "@/lib/personas";
-import { poseAt } from "@/lib/choreography";
-import { socialPoseAt } from "@/lib/social-choreography";
+import { roomPoseAt } from "@/lib/room-choreography";
 
 type Props = {
   persona: Persona;
@@ -54,7 +53,7 @@ function Arm({ side, robe, skin, arm, forearm, hand }: { side: number; robe: str
   );
 }
 
-export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, selected, reducedMotion, onSelect }: Props) {
+export function Disciple({ persona, position, rotation = 0, selected, reducedMotion, onSelect }: Props) {
   const body = useRef<Group>(null);
   const traveler = useRef<Group>(null);
   const leftFoot = useRef<Group>(null);
@@ -76,6 +75,8 @@ export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, sel
   const speech = useRef<Group>(null);
   const dots = useRef<Group>(null);
   const elapsed = useRef(0);
+  const resume = useRef(true);
+  useEffect(() => { resume.current = true; }, [reducedMotion]);
   useEffect(() => {
     probe.current = new URLSearchParams(window.location.search).get("inspectScene") === "1";
     const attribute = `data-motion-${persona.id}`;
@@ -101,12 +102,19 @@ export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, sel
   }, [sculpt]);
   useFrame((state, delta) => {
     if (document.hidden) return;
-    if (!reducedMotion) elapsed.current += Math.min(delta, 0.1);
-    const pose = reducedMotion ? poseAt(4) : poseAt(elapsed.current, phaseOffset);
-    const social = socialPoseAt(reducedMotion ? 0 : elapsed.current, Math.round((phaseOffset-5)/1.7));
+    // Use real visible-frame time, not the former 0.1s cap that slowed VPS travel.
+    if (!reducedMotion && !resume.current) elapsed.current += delta;
+    resume.current = false;
+    const pose = roomPoseAt(elapsed.current, persona.id);
+    const social = { amount: pose.phase === 'visit' ? 1 : 0, turn: 0, gesture: pose.gesture };
     if (!reducedMotion || !initialized.current) {
       initialized.current = true;
-      if (traveler.current) traveler.current.position.z = pose.travel;
+      if (traveler.current) {
+        traveler.current.position.set(pose.position[0] - position[0], pose.position[1] - position[1], pose.position[2] - position[2]);
+        const target = pose.heading - rotation;
+        const difference = Math.atan2(Math.sin(target - traveler.current.rotation.y), Math.cos(target - traveler.current.rotation.y));
+        traveler.current.rotation.y += difference * (elapsed.current > delta ? 1 - Math.exp(-delta * 12) : 1);
+      }
       if (body.current) body.current.position.y = -0.30 * pose.sit + pose.bob;
       if (body.current) body.current.rotation.y = social.turn * 0.35;
       if (head.current) { head.current.rotation.x = pose.sit * 0.12; head.current.rotation.y = social.turn * 0.65; }
@@ -152,6 +160,9 @@ export function Disciple({ persona, position, rotation = 0, phaseOffset = 6, sel
       const worldPosition = (ref: RefObject<Group | null>) => ref.current ? ref.current.getWorldPosition(point).toArray() : null;
       gl.domElement.setAttribute(`data-motion-${persona.id}`, JSON.stringify({
         phase: pose.phase, z: traveler.current.position.z,
+        world: traveler.current.getWorldPosition(point).toArray(), room: pose.room,
+        traveling: pose.traveling, fromRoom: pose.fromRoom, toRoom: pose.toRoom,
+        heading: traveler.current.rotation.y, role: persona.role,
         conversing: speech.current?.visible ?? false,
         speechVisible: speech.current?.visible ?? false,
         turn: head.current?.rotation.y ?? 0, gesture: leftArm.current?.rotation.z ?? 0,
