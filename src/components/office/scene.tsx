@@ -3,12 +3,13 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { CanvasTexture, Color, DoubleSide, MOUSE, TOUCH, Object3D, RepeatWrapping, Shape, Vector3, type Group, type InstancedMesh } from "three";
+import { CanvasTexture, Color, DoubleSide, MOUSE, TOUCH, Object3D, RepeatWrapping, Shape, Box3, Fog, Vector3, type Group, type InstancedMesh } from "three";
 import type { Agent } from "@/lib/agents";
 import { reconcileBindings } from "@/lib/agent-bindings";
 import { PERSONAS, type Persona } from "@/lib/personas";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { Disciple } from "./disciple";
+import { CityLandmarks, LANDMARK_PLACEMENTS } from "./city-landmarks";
 import { ROOMS, roomFor, type Room } from "@/lib/room-choreography";
 
 export type CameraAction = { kind: "zoom-in" | "zoom-out" | "reset" | "north" | "south" | "east" | "west"; serial: number };
@@ -86,7 +87,7 @@ function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; in
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const consumed = useRef<number | null>(null);
   // Logical zoom is dolly distance relative to this home view, never camera.zoom.
-  const baseDistance = 34;
+  const baseDistance = 58;
   const publish = useCallback(() => {
     if (!inspectScene || !controls.current) return;
     gl.domElement.dataset.mapCamera = JSON.stringify({ cameraType: camera.type,
@@ -108,10 +109,10 @@ function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; in
     consumed.current = action.serial;
     if (action.kind === "reset") {
       orbit.target.set(0, 0, 0);
-      camera.position.set(0, 20.4, -27.2);
+      camera.position.set(16.64525283848835, 43.5, -34.56422367047748);
     } else if (action.kind === "zoom-in" || action.kind === "zoom-out") {
       const offset = camera.position.clone().sub(orbit.target);
-      const distance = Math.max(5, Math.min(44, offset.length() * (action.kind === "zoom-in" ? 0.8 : 1.25)));
+      const distance = Math.max(2, offset.length() * (action.kind === "zoom-in" ? 0.8 : 1.25));
       camera.position.copy(orbit.target).add(offset.setLength(distance));
     } else {
       const step = Math.min(6, camera.position.distanceTo(orbit.target) * 0.12);
@@ -125,16 +126,15 @@ function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; in
   return <OrbitControls ref={controls} makeDefault target={[0, 0, 0]} enablePan enableZoom enableRotate
     mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }}
     touches={{ ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_ROTATE }}
-    screenSpacePanning={false} minDistance={5} maxDistance={44}
-    minPolarAngle={Math.PI / 9} maxPolarAngle={Math.PI * 0.39}
+    screenSpacePanning={false} minDistance={2} maxDistance={Infinity}
+    minPolarAngle={0.05} maxPolarAngle={Math.PI / 2 - 0.06}
     enableDamping={!paused} dampingFactor={0.12} onChange={() => {
       const orbit = controls.current;
       if (orbit) {
-        // Bound the ground target without altering the orbit angle or dolly distance.
-        const target = new Vector3(Math.max(-22, Math.min(22, orbit.target.x)), 0,
-          Math.max(-16, Math.min(16, orbit.target.z)));
-        camera.position.add(target.clone().sub(orbit.target));
-        orbit.target.copy(target);
+        // No artificial map-edge or zoom-out clamp. Keep the ground and far plane
+        // around the current view so navigating beyond town never exposes a slab edge.
+        camera.far = Math.max(300, camera.position.distanceTo(orbit.target) * 12);
+        camera.updateProjectionMatrix();
       }
       publish();
     }} />;
@@ -271,6 +271,17 @@ function OuterHomes({ homes }: { homes: { x: number; z: number; width: number; h
         });
       }
       masonry.push({ at: [x, height + 0.08, z], size: [width + 0.2, 0.16, depth + 0.2], tint: 0 });
+      if (index % 3 === 0) {
+        // Set-back upper volume and roof terrace, rather than recolored boxes.
+        masonry.push({ at: [x + width * 0.18, height + 0.8, z + depth * 0.14], size: [width * 0.55, 1.4, depth * 0.6], tint: 3 });
+        masonry.push({ at: [x + width * 0.18, height + 1.55, z + depth * 0.14], size: [width * 0.6, 0.18, depth * 0.65], tint: 1 });
+      } else if (index % 3 === 1) {
+        for (const sign of [-1, 1]) masonry.push({ at: [x + sign * width * 0.46, height + 0.27, z], size: [0.18, 0.45, depth], tint: 2 });
+        for (let step = 0; step < 7; step++) masonry.push({ at: [x + width / 2 + 0.5, (step + 1) * height / 14, z - depth / 2 + step * depth / 7], size: [0.85, (step + 1) * height / 7, depth / 7 + 0.02], tint: 3 });
+      } else {
+        for (const side of [-1, 1]) timber.push({ at: [x + side * width * 0.3, height + 0.55, z], size: [0.12, 1, depth * 0.7], tint: 0 });
+        for (let beam = 0; beam < 5; beam++) timber.push({ at: [x, height + 1.1, z + (beam - 2) * depth * 0.17], size: [width * 0.8, 0.12, 0.13], tint: 2 });
+      }
       for (const face of [-1, 1]) {
         timber.push({ at: [x - width * 0.2, 0.85, z + face * (depth / 2 + 0.035)], size: [0.8, 1.7, 0.07], tint: 1 });
         timber.push({ at: [x + width * 0.25, height * 0.67, z + face * (depth / 2 + 0.04)], size: [0.65, 0.65, 0.08], tint: 1 });
@@ -289,11 +300,28 @@ function EnvironmentProbe({ paused }: { paused: boolean }) {
   useFrame((_, delta) => {
     if (!paused && !document.hidden) elapsed.current += Math.min(delta, 0.1);
     gl.domElement.setAttribute("data-map-environment", JSON.stringify({ elapsed: elapsed.current, paused,
+      drawCalls: gl.info.render.calls, triangles: gl.info.render.triangles,
       treeSway: scene.getObjectByName("environment-breeze")?.rotation.z ?? 0,
       waterScale: scene.getObjectByName("environment-water")?.scale.x ?? 1 }));
   });
   useEffect(() => {
     const textures = new Set();
+    const landmarks: { kind: string; size: number[]; meshes: number; volumetric: number; flat: number }[] = [];
+    scene.updateMatrixWorld(true);
+    scene.traverse(object => {
+      if (!object.name.startsWith("landmark:")) return;
+      let meshes = 0, volumetric = 0, flat = 0;
+      object.traverse(child => {
+        if (!("geometry" in child)) return;
+        const geometry = (child as import("three").Mesh).geometry;
+        geometry.computeBoundingBox();
+        const size = geometry.boundingBox?.getSize(new Vector3());
+        meshes++;
+        if (size && Math.min(size.x, size.y, size.z) > 0.001) volumetric++; else flat++;
+      });
+      landmarks.push({ kind: object.userData.buildingKind, size: new Box3().setFromObject(object).getSize(new Vector3()).toArray(), meshes, volumetric, flat });
+    });
+    gl.domElement.setAttribute("data-map-architecture", JSON.stringify(landmarks));
     let rooms = 0, wallHeight = 0;
     scene.traverse(object => {
       if (object.name.startsWith("work-room:")) { rooms++; wallHeight = Math.max(wallHeight, object.userData.wallHeight ?? 0); }
@@ -303,7 +331,7 @@ function EnvironmentProbe({ paused }: { paused: boolean }) {
       }
     });
     gl.domElement.setAttribute("data-map-materials", JSON.stringify({ proceduralTextures: textures.size, rooms, wallHeight }));
-    return () => { gl.domElement.removeAttribute("data-map-materials"); };
+    return () => { gl.domElement.removeAttribute("data-map-materials"); gl.domElement.removeAttribute("data-map-architecture"); };
   });
   useEffect(() => () => gl.domElement.removeAttribute("data-map-environment"), [gl]);
   return null;
@@ -332,6 +360,7 @@ function CityDistricts({ animated }: { animated: boolean }) {
     for (const z of [-27, -17, -6, 5, 16, 27]) {
       for (const x of [-28, -16, -5, 5, 16, 28]) {
         if (Math.abs(z) < 12 && Math.abs(x) < 12) continue;
+        if (LANDMARK_PLACEMENTS.some(({ position, radius }) => Math.hypot(x - position[0], z - position[2]) < radius + 4)) continue;
         // The near-side homes stay low so the character courtyard remains readable.
         result.push({ x: x + Math.sin(z + x) * 0.6, z, width: 3.4 + Math.abs(Math.sin(x)) * 1.4,
           depth: 3 + Math.abs(Math.cos(z)) * 1.3, height: z < 0 ? 1.8 + Math.abs(Math.sin(x + z)) * 0.8 : 2.5 + Math.abs(Math.sin(x + z)) * 1.8 });
@@ -350,13 +379,37 @@ function CityDistricts({ animated }: { animated: boolean }) {
       <Block at={[0, 0.62, 5.9]} size={[2.5, 1.24, 0.75]} color="#9b7750" />
       {[-0.8, 0, 0.8].map((x) => <Amphora key={x} at={[x, 1.24, 5.9]} scale={0.48} />)}
     </group>))}
-    {/* Low garden beds give the city a cultivated edge without sealing it in walls. */}
-    {[-1, 1].map((side) => <group key={side}>
-      <Block at={[side * 27, -0.015, 0]} size={[4.5, 0.06, 7]} color="#9e9e71" />
-      {[-2, 0, 2].map((z) => <Block key={z} at={[side * 27, 0.035, z]} size={[3.8, 0.08, 0.4]} color="#7d875b" />)}
-    </group>)}
+
   </group>;
 }
+
+/* eslint-disable react-hooks/immutability -- Three scene is imperative GPU state. */
+function ContinuousGround() {
+  const ground = useRef<Group>(null);
+  const { camera, controls, scene } = useThree();
+  useEffect(() => {
+    const previous = scene.fog;
+    scene.fog = new Fog("#eee0c6", 200, 500);
+    return () => { scene.fog = previous; };
+  }, [scene]);
+  useFrame(() => {
+    if (!ground.current) return;
+    const orbit = controls as ComponentRef<typeof OrbitControls> | null;
+    const target = orbit?.target ?? new Vector3();
+    const distance = camera.position.distanceTo(target);
+    const span = Math.max(1000, distance * 20);
+    // Blend into the background well before either the slab or far-plane edge.
+    if (scene.fog instanceof Fog) {
+      scene.fog.near = Math.max(100, distance * 3);
+      scene.fog.far = Math.max(300, distance * 7);
+    }
+    ground.current.position.set(target.x, -0.08, target.z);
+    ground.current.scale.set(span, 0.08, span);
+  });
+  return <group ref={ground} name="continuous-ground"><mesh receiveShadow><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color="#c4ac83" roughness={1} /></mesh></group>;
+}
+
+/* eslint-enable react-hooks/immutability */
 
 function Courtyard({ animated }: { animated: boolean }) {
   const paving = useMemo(() => Array.from({ length: 25 * 24 }, (_, i) => {
@@ -365,7 +418,7 @@ function Courtyard({ animated }: { animated: boolean }) {
       size: [0.65 + Math.sin(i) * 0.025, 0.065, 0.62 + Math.cos(i) * 0.025] as Point, tint: i % 5 };
   }), []);
   return <group name="ancient-judean-courtyard">
-    <Block at={[0, -0.18, 0]} size={[90, 0.28, 70]} color="#c4ac83" />
+    <ContinuousGround />
     <Stones blocks={paving} />
     <group position={[0, 0, 12]}>
     <House x={-4.65} z={7.3} width={5.8} height={3.15} depth={2.4} />
@@ -499,7 +552,7 @@ export default function OfficeScene({ agents, selected, onSelect, cameraAction, 
   }, []);
   const paused = reducedMotion || !visible;
   return <Canvas shadows dpr={[1, 1.5]} frameloop={paused ? "demand" : "always"}
-    camera={{ position: [0, 20.4, -27.2], fov: 48, near: 0.1, far: 180 }}
+    camera={{ position: [16.64525283848835, 43.5, -34.56422367047748], fov: 48, near: 0.1, far: 700 }}
     gl={{ antialias: true, powerPreference: "low-power" }} onPointerMissed={() => onSelect(null)}
     aria-label="Seven visual slots for observed live workers; tool-driven room movement is a visual interpretation, not pairwise communication.">
     <color attach="background" args={["#eee0c6"]} />
@@ -511,6 +564,7 @@ export default function OfficeScene({ agents, selected, onSelect, cameraAction, 
     <StoneSurface>
     <Courtyard animated={!paused} />
     <CityDistricts animated={!paused} />
+    <CityLandmarks />
     <Block at={[0, -0.005, 0]} size={[25, 0.04, 2.5]} color="#ddc8a3" />
     {ROOMS.map((room, index) => <WorkRoom key={room.id} room={room} index={index} />)}
     {PERSONAS.map((persona, index) => {

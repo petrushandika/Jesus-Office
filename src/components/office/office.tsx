@@ -19,7 +19,7 @@ export function Office() {
     if(event.key==='Escape') setSelected(null);
     if(event.key==='Enter') {event.preventDefault();setSelected(PERSONAS[(PERSONAS.findIndex(p=>p.id===selected)+1)%PERSONAS.length].id);}
   }
-  return <main className="fixed inset-0 isolate overflow-hidden bg-[#d7c39d]">
+  return <main className="fixed inset-0 h-dvh w-screen isolate overflow-hidden bg-[#d7c39d]">
     <section tabIndex={0} onKeyDown={onKeyDown} aria-label="Peta kota 3D"
       className="absolute inset-0 touch-none focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-amber-100">
       <OfficeScene agents={agents} selected={selected} onSelect={setSelected} cameraAction={cameraAction}/>
