@@ -5,7 +5,7 @@ Source: https://github.com/petrushandika/Jesus-Office
 
 ## Textless spatial interface
 
-No visible text, titles, labels, tooltips, loading copy or laptop glyphs on desktop/mobile. Accessible region name remains nonvisual. Drag pans, right-drag or two-finger gesture orbits, scroll/pinch zooms. Keyboard arrows pan, +/- zoom, 0 reset, Enter selects a visual ring, Escape clears it. Perspective camera, open-roof rooms and original procedural stone materials.
+No visible text, titles, labels, tooltips, loading copy or laptop glyphs on desktop/mobile. Accessible region name remains nonvisual. Drag pans, right-drag or two-finger gesture orbits, scroll/pinch zooms. Keyboard arrows pan, +/- zoom, 0 reset, Enter selects a visual ring, Escape clears it. Perspective camera, open-roof rooms and original procedural stone materials. The canvas tracks the full dynamic viewport with no document scrollbar. Pan and zoom-out have no artificial city-edge clamps; a view-following ground prevents slab edges. Minimum dolly distance and above-ground tilt remain to prevent inverted/below-ground views. The authored town is finite, not an infinitely generated city. Eight distinct volumetric civic/market/garden landmarks supplement the homes and live-worker core; ambient architecture does not represent additional agents.
 
 ## Observed activity, not decorative worker loops
 
@@ -21,6 +21,7 @@ No invented pairwise conversation: this source does not provide structured sende
 
 Current browser acceptance:
 - `textless.browser-test.cjs`: desktop, compact and mobile fullscreen, selection with no labels.
+- `city.browser-test.cjs`: actual geometry bounds/volume, eight building types, beyond-city pan and zoom, rear orbit, mobile touch pan/pinch.
 - `scene.browser-test.cjs`: perspective orbit/pan/zoom/reset and masonry.
 - `runtime.browser-test.cjs`: real `/api/agents` polling, observed run bindings, actual world-space crossings and source-outage stop. Requires a real working delegated task. It does not fabricate manifests or fulfill fake successful API responses.
 
