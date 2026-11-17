@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { Color, DoubleSide, MOUSE, Object3D, Shape, type Group, type InstancedMesh } from "three";
+import { CanvasTexture, Color, DoubleSide, MOUSE, TOUCH, Object3D, RepeatWrapping, Shape, Vector3, type Group, type InstancedMesh } from "three";
 import type { Agent } from "@/lib/agents";
+import { reconcileBindings } from "@/lib/agent-bindings";
 import { PERSONAS, type Persona } from "@/lib/personas";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { Disciple } from "./disciple";
@@ -23,6 +24,38 @@ type Point = [number, number, number];
 const STONE = ["#cbb994", "#deceb0", "#d4c19f", "#e3d4b5", "#c6b18d"];
 
 
+const StoneRelief = createContext<CanvasTexture | null>(null);
+function StoneSurface({ children }: { children: React.ReactNode }) {
+  const [texture, setTexture] = useState<CanvasTexture | null>(null);
+  useEffect(() => {
+    // Original seamless limestone micro-relief: one 128px linear-data texture,
+    // shared across instanced masonry; no fetch, per-frame upload or extra draw call.
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 128;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const pixels = context.createImageData(128, 128);
+    for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+      const grain = Math.sin(x * 2.7 + y * 7.1) * Math.sin(x * 5.3 - y * 1.9);
+      const strata = Math.sin(y * Math.PI / 8 + Math.sin(x * Math.PI / 32));
+      const value = Math.round(215 + grain * 22 + strata * 10);
+      const offset = (y * 128 + x) * 4;
+      pixels.data[offset] = pixels.data[offset + 1] = pixels.data[offset + 2] = value;
+      pixels.data[offset + 3] = 255;
+    }
+    context.putImageData(pixels, 0, 0);
+    const relief = new CanvasTexture(canvas);
+    relief.wrapS = relief.wrapT = RepeatWrapping;
+    relief.anisotropy = 2;
+    // Publish the GPU resource only after mount; the same effect owns disposal.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTexture(relief);
+    return () => relief.dispose();
+  }, []);
+  return <StoneRelief.Provider value={texture}>{children}</StoneRelief.Provider>;
+}
+
+
 function Block({ at, size, color = "#a47b4d", rotation = 0 }: { at: Point; size: Point; color?: string; rotation?: number }) {
   return <mesh position={at} rotation={[0, rotation, 0]} castShadow receiveShadow><boxGeometry args={size} /><meshStandardMaterial color={color} roughness={1} /></mesh>;
 }
@@ -30,6 +63,7 @@ function Block({ at, size, color = "#a47b4d", rotation = 0 }: { at: Point; size:
 // All repeated stonework shares one draw call per section; no downloaded assets.
 function Stones({ blocks, palette = STONE }: { blocks: { at: Point; size: Point; tint?: number }[]; palette?: string[] }) {
   const ref = useRef<InstancedMesh>(null);
+  const relief = useContext(StoneRelief);
   useEffect(() => {
     if (!ref.current) return;
     const dummy = new Object3D();
@@ -42,28 +76,23 @@ function Stones({ blocks, palette = STONE }: { blocks: { at: Point; size: Point;
     if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true;
     ref.current.computeBoundingSphere();
   }, [blocks, palette]);
-  return <instancedMesh ref={ref} args={[undefined, undefined, blocks.length]} castShadow receiveShadow><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial roughness={1} /></instancedMesh>;
+  return <instancedMesh ref={ref} args={[undefined, undefined, blocks.length]} castShadow receiveShadow><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial roughness={0.94} bumpMap={relief} bumpScale={0.035} roughnessMap={relief} /></instancedMesh>;
 }
 
 // Three's camera/renderer are imperative objects, not immutable React state.
 /* eslint-disable react-hooks/immutability */
 function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; inspectScene: boolean; paused: boolean }) {
-  const { camera, size, gl, invalidate } = useThree();
+  const { camera, gl, invalidate } = useThree();
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const consumed = useRef<number | null>(null);
-  // Fill portrait as well as wide viewports instead of fitting a boxed stage.
-  const baseZoom = Math.max(size.width / 34, size.height / 34);
-  const previousZoom = useRef<number | null>(null);
+  // Logical zoom is dolly distance relative to this home view, never camera.zoom.
+  const baseDistance = 34;
   const publish = useCallback(() => {
     if (!inspectScene || !controls.current) return;
-    gl.domElement.dataset.mapCamera = JSON.stringify({ zoom: camera.zoom, target: controls.current.target.toArray(), position: camera.position.toArray() });
+    gl.domElement.dataset.mapCamera = JSON.stringify({ cameraType: camera.type,
+      zoom: baseDistance / camera.position.distanceTo(controls.current.target),
+      target: controls.current.target.toArray(), position: camera.position.toArray() });
   }, [inspectScene, gl, camera]);
-  useEffect(() => {
-    camera.zoom = previousZoom.current === null ? baseZoom : camera.zoom * baseZoom / previousZoom.current;
-    previousZoom.current = baseZoom;
-    camera.updateProjectionMatrix();
-    publish(); invalidate();
-  }, [baseZoom, camera, invalidate, publish]);
   useEffect(() => {
     if (!inspectScene) return;
     gl.domElement.dataset.mapWorld = JSON.stringify(MAP_WORLD);
@@ -79,32 +108,33 @@ function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; in
     consumed.current = action.serial;
     if (action.kind === "reset") {
       orbit.target.set(0, 0, 0);
-      camera.position.set(0, 26, -32);
-      camera.zoom = baseZoom;
+      camera.position.set(0, 20.4, -27.2);
     } else if (action.kind === "zoom-in" || action.kind === "zoom-out") {
-      camera.zoom = Math.max(baseZoom * 0.85, Math.min(baseZoom * 3.5, camera.zoom * (action.kind === "zoom-in" ? 1.25 : 0.8)));
+      const offset = camera.position.clone().sub(orbit.target);
+      const distance = Math.max(5, Math.min(44, offset.length() * (action.kind === "zoom-in" ? 0.8 : 1.25)));
+      camera.position.copy(orbit.target).add(offset.setLength(distance));
     } else {
-      const step = Math.min(6, size.height / camera.zoom * 0.18);
+      const step = Math.min(6, camera.position.distanceTo(orbit.target) * 0.12);
       const dx = action.kind === "east" ? -step : action.kind === "west" ? step : 0;
       const dz = action.kind === "north" ? step : action.kind === "south" ? -step : 0;
       orbit.target.x += dx; orbit.target.z += dz;
       camera.position.x += dx; camera.position.z += dz;
     }
     camera.updateProjectionMatrix(); orbit.update(); publish(); invalidate();
-  }, [action, baseZoom, camera, invalidate, size.height, publish]);
-  return <OrbitControls ref={controls} makeDefault target={[0, 0, 0]} enablePan enableZoom
-    enableRotate={false} mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }} screenSpacePanning={false} minZoom={baseZoom * 0.85} maxZoom={baseZoom * 3.5}
+  }, [action, camera, invalidate, publish]);
+  return <OrbitControls ref={controls} makeDefault target={[0, 0, 0]} enablePan enableZoom enableRotate
+    mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }}
+    touches={{ ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_ROTATE }}
+    screenSpacePanning={false} minDistance={5} maxDistance={44}
+    minPolarAngle={Math.PI / 9} maxPolarAngle={Math.PI * 0.39}
     enableDamping={!paused} dampingFactor={0.12} onChange={() => {
       const orbit = controls.current;
       if (orbit) {
-        // Keep the navigable map inside the continuous terrain, not the old courtyard box.
-        const limitX = Math.max(0, Math.min(22, MAP_WORLD.maxX - size.width / camera.zoom / 2 - 1));
-        const groundPitch = 26 / Math.hypot(26, 32);
-        const limitZ = Math.max(0, Math.min(16, MAP_WORLD.maxZ - size.height / camera.zoom / groundPitch / 2 - 1));
-        const x = Math.max(-limitX, Math.min(limitX, orbit.target.x));
-        const z = Math.max(-limitZ, Math.min(limitZ, orbit.target.z));
-        camera.position.x += x - orbit.target.x; camera.position.z += z - orbit.target.z;
-        orbit.target.x = x; orbit.target.z = z;
+        // Bound the ground target without altering the orbit angle or dolly distance.
+        const target = new Vector3(Math.max(-22, Math.min(22, orbit.target.x)), 0,
+          Math.max(-16, Math.min(16, orbit.target.z)));
+        camera.position.add(target.clone().sub(orbit.target));
+        orbit.target.copy(target);
       }
       publish();
     }} />;
@@ -262,6 +292,19 @@ function EnvironmentProbe({ paused }: { paused: boolean }) {
       treeSway: scene.getObjectByName("environment-breeze")?.rotation.z ?? 0,
       waterScale: scene.getObjectByName("environment-water")?.scale.x ?? 1 }));
   });
+  useEffect(() => {
+    const textures = new Set();
+    let rooms = 0, wallHeight = 0;
+    scene.traverse(object => {
+      if (object.name.startsWith("work-room:")) { rooms++; wallHeight = Math.max(wallHeight, object.userData.wallHeight ?? 0); }
+      if ("material" in object) {
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) if (material.bumpMap) textures.add(material.bumpMap.uuid);
+      }
+    });
+    gl.domElement.setAttribute("data-map-materials", JSON.stringify({ proceduralTextures: textures.size, rooms, wallHeight }));
+    return () => { gl.domElement.removeAttribute("data-map-materials"); };
+  });
   useEffect(() => () => gl.domElement.removeAttribute("data-map-environment"), [gl]);
   return null;
 }
@@ -342,12 +385,6 @@ function Courtyard({ animated }: { animated: boolean }) {
   </group>;
 }
 
-// A tiny in-mesh bitmap label, not a font/texture request. It says DEMO, never a worker status.
-const DEMO = ["110011101010111", "101010001110101", "101011001110101", "101010001010101", "110011101010111"];
-function DemoLabel() {
-  return <group position={[0.34, 0.215, -0.021]} rotation={[0, Math.PI, 0]}>{DEMO.flatMap((row, y) => [...row].map((v, x) => v === "1" ? <mesh key={`${x}:${y}`} position={[x * 0.012, -y * 0.012, 0]}><planeGeometry args={[0.009, 0.009]} /><meshBasicMaterial color="#efcf87" side={DoubleSide} /></mesh> : null))}</group>;
-}
-
 function CodeScreen({ animated, phase }: { animated: boolean; phase: number }) {
   const lines = useRef<InstancedMesh>(null);
   const cursor = useRef<Group>(null);
@@ -378,7 +415,6 @@ function CodeScreen({ animated, phase }: { animated: boolean; phase: number }) {
   return <group>
     <mesh><boxGeometry args={[0.89, 0.59, 0.035]} /><meshStandardMaterial color="#4c514a" roughness={0.8} /></mesh>
     <mesh position={[0, 0, -0.019]} rotation={[0, Math.PI, 0]}><planeGeometry args={[0.81, 0.51]} /><meshBasicMaterial color="#233832" /></mesh>
-    <DemoLabel />
     <instancedMesh ref={lines} args={[undefined, undefined, 27]}><boxGeometry args={[1, 1, 1]} /><meshBasicMaterial /></instancedMesh>
     <group ref={cursor} position={[-0.24, -0.205, -0.025]}><mesh><boxGeometry args={[0.012, 0.025, 0.002]} /><meshBasicMaterial color="#f3dba1" /></mesh></group>
   </group>;
@@ -402,14 +438,34 @@ function CodingStation({ persona, position, animated, index }: { persona: Person
 
 function WorkRoom({ room, index }: { room: Room; index: number }) {
   const side = Math.sign(room.center[2]);
-  return <group position={room.center} name={`work-room:${room.id}`} userData={{ title: room.title }}>
+  const walls = useMemo(() => {
+    const blocks: { at: Point; size: Point; tint: number }[] = [];
+    const course = (x: number, z: number, width: number, depth: number, rows: number) => {
+      const alongX = width > depth;
+      const count = Math.ceil(Math.max(width, depth) / 0.7);
+      for (let row = 0; row < rows; row++) for (let col = 0; col < count; col++) {
+        const offset = ((col + 0.5) / count - 0.5) * (alongX ? width : depth);
+        blocks.push({ at: [x + (alongX ? offset : 0), 0.19 + row * 0.38, z + (alongX ? 0 : offset)],
+          size: [alongX ? width / count - 0.018 : width, 0.36, alongX ? depth : depth / count - 0.018],
+          tint: (row * 3 + col + index) % STONE.length });
+      }
+    };
+    course(0, side * 2.5, 5.7, 0.28, 5);
+    for (const direction of [-1, 1]) {
+      course(direction * 2.8, 0, 0.26, 5, 4);
+      course(direction * 1.85, -side * 2.5, 1.9, 0.28, 3);
+    }
+    return blocks;
+  }, [side, index]);
+  return <group position={room.center} name={`work-room:${room.id}`} userData={{ title: room.title, wallHeight: 1.9 }}>
     <Block at={[0, 0.005, 0]} size={[5.6, 0.07, 5]} color={room.tint} />
-    {/* Open roof, low cutaway masonry; a real 1.8m doorway faces the central lane. */}
-    <Block at={[0, 0.64, side * 2.5]} size={[5.7, 1.28, 0.24]} color="#d6c5a5" />
+    {/* Open roofs and stepped-height walls keep rooms readable from both orbit sides.
+        Masonry stops at the original 1.8m doorway: circulation is unchanged. */}
+    <Stones blocks={walls} />
+    <Block at={[0, 1.94, side * 2.5]} size={[5.82, 0.1, 0.36]} color="#bca783" />
     {[-1, 1].map(s => <group key={s}>
-      <Block at={[s * 2.8, 0.54, 0]} size={[0.22, 1.08, 5]} color="#cdbb99" />
-      <Block at={[s * 1.85, 0.46, -side * 2.5]} size={[1.9, 0.92, 0.24]} color="#dfcfaf" />
-      <Block at={[s * 0.95, 0.72, -side * 2.5]} size={[0.18, 1.44, 0.3]} color="#bca27b" />
+      <Block at={[s * 2.8, 1.56, 0]} size={[0.34, 0.1, 5]} color="#c4b08c" />
+      <Block at={[s * 0.99, 0.8, -side * 2.5]} size={[0.18, 1.6, 0.38]} color="#bca27b" />
     </group>)}
     <Block at={[0, 0.04, -side * 2.5]} size={[1.8, 0.06, 0.5]} color="#e6d6b5" />
     {/* Role-specific fixed work objects: council map, plans, code, review tiles, specimens, planning board, scrolls. */}
@@ -425,8 +481,14 @@ function WorkRoom({ room, index }: { room: Room; index: number }) {
   </group>;
 }
 
-// Artistic coding is explicitly DEMO scenery, independent of the real agents prop.
-export default function OfficeScene({ selected, onSelect, cameraAction, inspectScene: inspectOverride }: Props) {
+// Stable slots represent observed runtime workers; room routing is a visual interpretation.
+export default function OfficeScene({ agents, selected, onSelect, cameraAction, inspectScene: inspectOverride }: Props) {
+  const [bindingState, setBindingState] = useState(() => ({ agents, bindings: reconcileBindings({}, agents, PERSONAS.map(p => p.id)) }));
+  let bindings = bindingState.bindings;
+  if (bindingState.agents !== agents) {
+    bindings = reconcileBindings(bindings, agents, PERSONAS.map(p => p.id));
+    setBindingState({ agents, bindings });
+  }
   const [inspectScene] = useState(() => inspectOverride ?? new URLSearchParams(window.location.search).get('inspectScene') === '1');
   const reducedMotion = useReducedMotion();
   const [visible, setVisible] = useState(true);
@@ -436,24 +498,29 @@ export default function OfficeScene({ selected, onSelect, cameraAction, inspectS
     return () => document.removeEventListener("visibilitychange", update);
   }, []);
   const paused = reducedMotion || !visible;
-  return <Canvas orthographic shadows dpr={[1, 1.5]} frameloop={paused ? "demand" : "always"}
-    camera={{ position: [0, 26, -32], zoom: 35, near: 0.1, far: 180 }}
+  return <Canvas shadows dpr={[1, 1.5]} frameloop={paused ? "demand" : "always"}
+    camera={{ position: [0, 20.4, -27.2], fov: 48, near: 0.1, far: 180 }}
     gl={{ antialias: true, powerPreference: "low-power" }} onPointerMissed={() => onSelect(null)}
-    aria-label="Ancient open-roof rooms with seven visual team personas walking between work areas. Decorative role choreography, not live agent assignments.">
+    aria-label="Seven visual slots for observed live workers; tool-driven room movement is a visual interpretation, not pairwise communication.">
     <color attach="background" args={["#eee0c6"]} />
-    <hemisphereLight args={["#fff2d6", "#a7a27d", 2.1]} />
-    <directionalLight position={[-7, 14, -8]} color="#ffe2ac" intensity={2.5} castShadow shadow-mapSize={[1024, 1024]}
-      shadow-camera-left={-13} shadow-camera-right={13} shadow-camera-top={14} shadow-camera-bottom={-12}
+    <hemisphereLight args={["#e8f0ef", "#97836a", 1.35]} />
+    <directionalLight position={[12, 9, 10]} color="#dce8f3" intensity={0.65} />
+    <directionalLight position={[-9, 18, -12]} color="#ffe3b8" intensity={2.7} castShadow shadow-mapSize={[1024, 1024]}
+      shadow-camera-left={-18} shadow-camera-right={18} shadow-camera-top={17} shadow-camera-bottom={-17}
       shadow-camera-near={0.1} shadow-camera-far={50} shadow-normalBias={0.04} shadow-bias={-0.0002} />
+    <StoneSurface>
     <Courtyard animated={!paused} />
     <CityDistricts animated={!paused} />
     <Block at={[0, -0.005, 0]} size={[25, 0.04, 2.5]} color="#ddc8a3" />
     {ROOMS.map((room, index) => <WorkRoom key={room.id} room={room} index={index} />)}
-    {PERSONAS.map((persona, index) => <group key={persona.id}>
-      <CodingStation persona={persona} position={roomFor(persona.id).home} animated={!paused} index={index} />
-      <Disciple persona={persona} position={roomFor(persona.id).home} rotation={0}
+    {PERSONAS.map((persona, index) => {
+      const boundAgent = agents.find(agent => agent.id === bindings[persona.id]);
+      return <group key={persona.id}>
+      <CodingStation persona={persona} position={roomFor(persona.id).home} animated={false} index={index} />
+      <Disciple persona={persona} agent={boundAgent} position={roomFor(persona.id).home} rotation={0}
         selected={selected === persona.id} reducedMotion={paused} onSelect={onSelect} />
-    </group>)}
+    </group>; })}
+    </StoneSurface>
     <MapCamera action={cameraAction} inspectScene={inspectScene} paused={paused} />
     {inspectScene && <EnvironmentProbe paused={paused} />}
   </Canvas>;

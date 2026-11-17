@@ -1,48 +1,29 @@
 # Jesus-Office
 
-Source for Jesus-Office: https://github.com/petrushandika/Jesus-Office.
+Public 3D office: https://office.petrushandika.com
+Source: https://github.com/petrushandika/Jesus-Office
 
-Live demo: https://office.petrushandika.com.
+## Textless spatial interface
 
-## Full-screen city map
+No visible text, titles, labels, tooltips, loading copy or laptop glyphs on desktop/mobile. Accessible region name remains nonvisual. Drag pans, right-drag or two-finger gesture orbits, scroll/pinch zooms. Keyboard arrows pan, +/- zoom, 0 reset, Enter selects a visual ring, Escape clears it. Perspective camera, open-roof rooms and original procedural stone materials.
 
-The 3D world fills the viewport on desktop and mobile. Drag to explore and scroll/pinch to zoom. There are no visible arrow controls, resident lists, or runtime panels. Focus the map to use arrow keys, +/- zoom, 0 reset, Enter to cycle roles, and Escape to clear selection. Decorative conversations and environmental motion are not live agent messages.
+## Observed activity, not decorative worker loops
 
-Run `map.browser-test.cjs` with the same browser test environment variables to verify viewport coverage, navigation and absence of dashboard controls.
+The frontend polls `/api/agents` every three seconds. Sanitized Hermes delegation manifests/logs provide run/task identity, tool name, timestamps and state. Seven visual slots bind stably to real running tasks; these are visual personas, not claims of seven configured named agents. More than seven simultaneous workers cannot all be represented by this scene.
 
-## Experience
+Tool-category changes initiate door/lane/different-room routes. Typing represents observed explicit file-edit tools; reading, thinking and waiting have separate poses. A completed tool observation remains visible up to eight seconds so polling can capture it. This is visualization of recently observed activity, not proof that a tool is still executing. File-edit tools do not guarantee that the file contains source code. Terminal is not automatically classified as coding. Inactive, disconnected, stale or completed workers stop translating. A 120-second transcript silence threshold is conservative freshness, not a process-liveness guarantee.
 
-Seven role-based visual characters: Yesus (Leader), Petrus (Software Architect), Yohanes (Senior Engineer), Yakobus (QA & Security), Andreas (Research Engineer), Filipus (Product Planner), and Matius (Technical Writer). Original robed figures move between open-roof workrooms in an ancient Judean city inspired by Nazareth/Jerusalem. Artistic interpretation, not historical likeness or religious authority.
+No invented pairwise conversation: this source does not provide structured sender/recipient/message events. No fake speech bubbles. Routing between work areas is a spatial interpretation of tool categories, not a claim of real agent-to-agent dispatch. Tool events of the same category do not repeatedly trigger trips. Recycled visual slots may retain prior spatial position. Ambient trees/water are decorative only. Laptop bars never show actual source or secrets.
 
-Character animation does **not** claim that an AI worker is executing a task. The map does not poll or display runtime telemetry. No arbitrary persona-to-worker assignment is implied. Reduced-motion preferences are respected.
+## Verification
 
-Project catalog UI and catalog data are not included in this release. Retired robot assets are not used.
+`npm test`, `npm run typecheck`, `npm run lint`, `npm run build`.
 
-## Development
+Current browser acceptance:
+- `textless.browser-test.cjs`: desktop, compact and mobile fullscreen, selection with no labels.
+- `scene.browser-test.cjs`: perspective orbit/pan/zoom/reset and masonry.
+- `runtime.browser-test.cjs`: real `/api/agents` polling, observed run bindings, actual world-space crossings and source-outage stop. Requires a real working delegated task. It does not fabricate manifests or fulfill fake successful API responses.
 
-```sh
-npm ci
-npm run dev
-npm test
-npm run typecheck
-npm run lint
-npm run build
-```
+Set `OFFICE_PLAYWRIGHT`, `OFFICE_TEST_URL`, `OFFICE_TEST_OUTPUT`. Historical `map`, `motion`, `rooms`, `office` browser scripts target old decorative behavior and are not acceptance for this release. Unit fixtures remain isolated from the live runtime source.
 
-Use a Node version supporting `--experimental-strip-types` and Next.js 16. Environment options: `OFFICE_RUNS_DIR`, `OFFICE_GATEWAY_FILE`. Missing source data is reported honestly. Never commit credentials or raw runtime logs.
-
-## Browser acceptance
-
-`office.browser-test.cjs` exercises the actual deployed WebGL page, role selection, absence of dashboard UI, mobile width and reduced-motion preference. Set `OFFICE_TEST_URL`, `OFFICE_TEST_OUTPUT` and `OFFICE_PLAYWRIGHT` (path to your installed Playwright package). Without an override, tests use a locally installed `@playwright/test` package and write evidence under `test-results/`.
-
-```sh
-OFFICE_PLAYWRIGHT=/absolute/path/to/playwright OFFICE_TEST_URL=http://localhost:3000 node office.browser-test.cjs
-```
-
-`motion.browser-test.cjs` records real WebGL video and samples actual rendered character transforms under `?inspectScene=1`, checking translated positions, alternating typing hands, and reduced-motion freeze. Code displays are decorative loops, not real project source or execution evidence. Laptops are a deliberate anachronism within the ancient setting.
-
-## Deployment
-
-Build standalone output, then copy `public` and `.next/static` into the corresponding `.next/standalone` locations. Start `server.js` with `NODE_ENV=production`, `HOSTNAME=127.0.0.1` and the configured `PORT`, behind an HTTPS reverse proxy. Production systemd/Nginx configuration and credentials remain outside the repository.
-
-Use immutable release directories; verify the candidate before switching the service. Preserve the previous release for rollback.
+Build standalone output and copy `public` plus `.next/static`. Run `server.js` with `NODE_ENV=production`, loopback HOSTNAME, PORT, OFFICE_RUNS_DIR and OFFICE_GATEWAY_FILE. Verify immutable candidate before switching the service; retain previous release for rollback. No credentials/raw logs in this repository.
