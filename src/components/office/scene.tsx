@@ -10,6 +10,7 @@ import { PERSONAS, type Persona } from "@/lib/personas";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { Disciple } from "./disciple";
 import { CityLandmarks, LANDMARK_PLACEMENTS } from "./city-landmarks";
+import { CityNpcs } from "./city-npcs";
 import { ROOMS, roomFor, type Room } from "@/lib/room-choreography";
 
 export type CameraAction = { kind: "zoom-in" | "zoom-out" | "reset" | "north" | "south" | "east" | "west"; serial: number };
@@ -554,7 +555,7 @@ export default function OfficeScene({ agents, selected, onSelect, cameraAction, 
   return <Canvas shadows dpr={[1, 1.5]} frameloop={paused ? "demand" : "always"}
     camera={{ position: [16.64525283848835, 43.5, -34.56422367047748], fov: 48, near: 0.1, far: 700 }}
     gl={{ antialias: true, powerPreference: "low-power" }} onPointerMissed={() => onSelect(null)}
-    aria-label="Seven visual slots for observed live workers; tool-driven room movement is a visual interpretation, not pairwise communication.">
+    aria-label="Jesus Office: decorative NPC citizens are separate from seven visual slots for observed live workers. NPC movement is not AI task activity.">
     <color attach="background" args={["#eee0c6"]} />
     <hemisphereLight args={["#e8f0ef", "#97836a", 1.35]} />
     <directionalLight position={[12, 9, 10]} color="#dce8f3" intensity={0.65} />
@@ -565,6 +566,7 @@ export default function OfficeScene({ agents, selected, onSelect, cameraAction, 
     <Courtyard animated={!paused} />
     <CityDistricts animated={!paused} />
     <CityLandmarks />
+    <CityNpcs paused={paused} inspectScene={inspectScene} />
     <Block at={[0, -0.005, 0]} size={[25, 0.04, 2.5]} color="#ddc8a3" />
     {ROOMS.map((room, index) => <WorkRoom key={room.id} room={room} index={index} />)}
     {PERSONAS.map((persona, index) => {

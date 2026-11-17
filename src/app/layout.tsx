@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Jesus-Office",
-  description: "Pelataran kota kuno bersama Yesus dan dua belas murid: animasi berjalan, duduk, dan ngoding dengan telemetri Hermes terpisah.",
+  title: "Jesus Office",
+  description: "Kota 3D Jesus Office: eksplorasi 360 derajat, warga NPC dekoratif, dan visualisasi aktivitas worker AI nyata yang terpisah.",
 };
 
 export const viewport: Viewport = {

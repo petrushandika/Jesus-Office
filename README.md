@@ -1,4 +1,4 @@
-# Jesus-Office
+# Jesus Office
 
 Public 3D office: https://office.petrushandika.com
 Source: https://github.com/petrushandika/Jesus-Office
@@ -6,6 +6,10 @@ Source: https://github.com/petrushandika/Jesus-Office
 ## Textless spatial interface
 
 No visible text, titles, labels, tooltips, loading copy or laptop glyphs on desktop/mobile. Accessible region name remains nonvisual. Drag pans, right-drag or two-finger gesture orbits, scroll/pinch zooms. Keyboard arrows pan, +/- zoom, 0 reset, Enter selects a visual ring, Escape clears it. Perspective camera, open-roof rooms and original procedural stone materials. The canvas tracks the full dynamic viewport with no document scrollbar. Pan and zoom-out have no artificial city-edge clamps; a view-following ground prevents slab edges. Minimum dolly distance and above-ground tilt remain to prevent inverted/below-ground views. The authored town is finite, not an infinitely generated city. Eight distinct volumetric civic/market/garden landmarks supplement the homes and live-worker core; ambient architecture does not represent additional agents.
+
+## Ambient citizens
+
+Jesus Office includes decorative NPC citizens walking around the town, pausing and carrying baskets or staffs. They are not AI agents, never use laptops, never display task output and never enter the worker-room routes. Their animation is intentionally independent of `/api/agents`; an API outage freezes real workers but does not mean ambient citizens must disappear. Reduced-motion and hidden-tab pause freeze NPC poses. Inspection metadata explicitly marks them decorative; no visible UI text is added.
 
 ## Observed activity, not decorative worker loops
 
@@ -20,6 +24,7 @@ No invented pairwise conversation: this source does not provide structured sende
 `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`.
 
 Current browser acceptance:
+- `npc.browser-test.cjs`: exact Jesus Office title, actual full 360-degree input sweep, NPC movement/freeze, full viewport including ultrawide and mobile landscape.
 - `textless.browser-test.cjs`: desktop, compact and mobile fullscreen, selection with no labels.
 - `city.browser-test.cjs`: actual geometry bounds/volume, eight building types, beyond-city pan and zoom, rear orbit, mobile touch pan/pinch.
 - `scene.browser-test.cjs`: perspective orbit/pan/zoom/reset and masonry.
