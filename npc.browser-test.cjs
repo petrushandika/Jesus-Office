@@ -20,8 +20,8 @@ fs.mkdirSync(out,{recursive:true});
   const views=[];let swept=0;
   const initial=await camera(); let previous=Math.atan2(initial.position[0]-initial.target[0],initial.position[2]-initial.target[2]);
   for(let i=0;i<8;i++){
-   await page.mouse.move(500,400);await page.mouse.down({button:'right'});
-   await page.mouse.move(600,400,{steps:5});await page.mouse.up({button:'right'});
+   await page.mouse.move(500,400);await page.mouse.down({button:'left'});
+   await page.mouse.move(600,400,{steps:5});await page.mouse.up({button:'left'});
    const current=await camera(); const angle=Math.atan2(current.position[0]-current.target[0],current.position[2]-current.target[2]);
    swept+=Math.atan2(Math.sin(angle-previous),Math.cos(angle-previous)); previous=angle;views.push(current);
    assert.ok(Math.hypot(...current.target.map((v,j)=>v-initial.target[j]))<0.01,'orbit preserves target');
