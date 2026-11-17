@@ -5,10 +5,12 @@ import { useFrame, useThree } from "@react-three/fiber";
 
 import { Color, DoubleSide, Float32BufferAttribute, LatheGeometry, Shape, ShapeGeometry, Vector2, Vector3, type Group } from "three";
 import type { Persona } from "@/lib/personas";
-import { roomPoseAt } from "@/lib/room-choreography";
+import { createLiveController } from "@/lib/live-choreography";
+import type { Agent } from "@/lib/agents";
 
 type Props = {
   persona: Persona;
+  agent?: Agent;
   position: [number, number, number];
   rotation?: number;
   phaseOffset?: number;
@@ -53,7 +55,8 @@ function Arm({ side, robe, skin, arm, forearm, hand }: { side: number; robe: str
   );
 }
 
-export function Disciple({ persona, position, rotation = 0, selected, reducedMotion, onSelect }: Props) {
+export function Disciple({ persona, agent, position, rotation = 0, selected, reducedMotion, onSelect }: Props) {
+  const controller = useMemo(() => createLiveController(persona.id), [persona.id]);
   const body = useRef<Group>(null);
   const traveler = useRef<Group>(null);
   const leftFoot = useRef<Group>(null);
@@ -72,8 +75,7 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
   const lastSit = useRef(-1);
   const point = useMemo(() => new Vector3(), []);
   const head = useRef<Group>(null);
-  const speech = useRef<Group>(null);
-  const dots = useRef<Group>(null);
+  const laptop = useRef<Group>(null);
   const elapsed = useRef(0);
   const resume = useRef(true);
   useEffect(() => { resume.current = true; }, [reducedMotion]);
@@ -101,12 +103,13 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
     sculpt.mantle.dispose();
   }, [sculpt]);
   useFrame((state, delta) => {
-    if (document.hidden) return;
-    // Use real visible-frame time, not the former 0.1s cap that slowed VPS travel.
-    if (!reducedMotion && !resume.current) elapsed.current += delta;
+    if (document.hidden) { resume.current = true; return; }
+    // First visible frame must not replay a hidden tab's accumulated delta.
+    const step = reducedMotion || resume.current ? 0 : delta;
+    elapsed.current += step;
     resume.current = false;
-    const pose = roomPoseAt(elapsed.current, persona.id);
-    const social = { amount: pose.phase === 'visit' ? 1 : 0, turn: 0, gesture: pose.gesture };
+    const pose = controller.update(step, agent, Date.now());
+    if (laptop.current) laptop.current.visible = pose.active && !pose.traveling;
     if (!reducedMotion || !initialized.current) {
       initialized.current = true;
       if (traveler.current) {
@@ -116,10 +119,7 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
         traveler.current.rotation.y += difference * (elapsed.current > delta ? 1 - Math.exp(-delta * 12) : 1);
       }
       if (body.current) body.current.position.y = -0.30 * pose.sit + pose.bob;
-      if (body.current) body.current.rotation.y = social.turn * 0.35;
-      if (head.current) { head.current.rotation.x = pose.sit * 0.12; head.current.rotation.y = social.turn * 0.65; }
-      if (speech.current) { speech.current.visible = social.amount > 0.05 && !reducedMotion; speech.current.scale.setScalar(social.amount); }
-      if (dots.current) dots.current.children.forEach((dot,i)=>{dot.position.y=Math.sin(elapsed.current*5+i)*0.035;});
+      if (head.current) { head.current.rotation.x = pose.sit * 0.12 + pose.headTilt; head.current.rotation.y = pose.headTurn; }
       for (const [foot, lift, stride] of [[leftFoot, pose.leftFoot, pose.leftStride], [rightFoot, pose.rightFoot, pose.rightStride]] as const) {
         if (!foot.current) continue;
         foot.current.position.y = 0.065 + lift;
@@ -127,11 +127,9 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
         foot.current.rotation.x = -stride * 0.8;
       }
       for (const [arm, forearm, hand, swing, tap] of [[leftArm, leftForearm, leftHand, pose.leftArm, pose.leftHand], [rightArm, rightForearm, rightHand, pose.rightArm, pose.rightHand]] as const) {
-        if (arm.current) arm.current.rotation.x = -0.95 * pose.sit + swing;
+        if (arm.current) arm.current.rotation.x = -0.95 * pose.sit + swing - pose.armRest;
         if (forearm.current) forearm.current.rotation.x = -0.28 - 0.72 * pose.sit + tap * 0.45;
-        if (hand.current) hand.current.rotation.x = 0.38 * pose.sit + tap * (1-social.amount);
-        if (arm.current) { arm.current.rotation.x += social.gesture * 0.65; arm.current.rotation.z = (arm===leftArm?1:-1)*social.gesture*0.7; }
-        if (forearm.current) forearm.current.rotation.x -= social.gesture*0.6;
+        if (hand.current) hand.current.rotation.x = 0.38 * pose.sit + tap;
       }
       // Lift the hem while the torso lowers, draping linen over seated knees.
       if (lastSit.current !== pose.sit) {
@@ -160,11 +158,12 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
       const worldPosition = (ref: RefObject<Group | null>) => ref.current ? ref.current.getWorldPosition(point).toArray() : null;
       gl.domElement.setAttribute(`data-motion-${persona.id}`, JSON.stringify({
         phase: pose.phase, z: traveler.current.position.z,
+        agentId: pose.agentId, run: pose.run, heartbeatAt: pose.heartbeatAt, active: pose.active,
         world: traveler.current.getWorldPosition(point).toArray(), room: pose.room,
         traveling: pose.traveling, fromRoom: pose.fromRoom, toRoom: pose.toRoom,
         heading: traveler.current.rotation.y, role: persona.role,
-        conversing: speech.current?.visible ?? false,
-        speechVisible: speech.current?.visible ?? false,
+        conversing: false, speechVisible: false,
+        laptopVisible: laptop.current?.visible ?? false,
         turn: head.current?.rotation.y ?? 0, gesture: leftArm.current?.rotation.z ?? 0,
         sit: Math.max(0, Math.min(1, -body.current.position.y / 0.30)),
         leftHand: worldPosition(leftHand), rightHand: worldPosition(rightHand),
@@ -179,10 +178,14 @@ export function Disciple({ persona, position, rotation = 0, selected, reducedMot
       onPointerOver={(event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; }}
       onPointerOut={() => { document.body.style.cursor = ""; }}>
       <group ref={traveler} name="station-travel">
-      <group ref={speech} position={[0,2.7,0]} visible={false}>
-        <mesh scale={[0.48,0.22,0.14]}><sphereGeometry args={[1,12,8]}/><meshStandardMaterial color="#fff1ce" roughness={1}/></mesh>
-        <mesh position={[0, -0.22,0]} rotation={[0,0,Math.PI]}><coneGeometry args={[0.09,0.2,3]}/><meshStandardMaterial color="#fff1ce"/></mesh>
-        <group ref={dots} position={[0,0,-0.14]}>{[-1,0,1].map(i=><mesh key={i} position={[i*0.17,0,0]}><sphereGeometry args={[0.045,8,6]}/><meshBasicMaterial color="#756448"/></mesh>)}</group>
+      <group ref={laptop} name="portable-laptop" position={[0, persona.height * 0.95, 0.58]} visible={false}>
+        <mesh><boxGeometry args={[0.88, 0.045, 0.48]} /><meshStandardMaterial color="#55655f" /></mesh>
+        {[0, 1, 2, 3].map(row => <mesh key={row} position={[0, 0.027, -0.14 + row * 0.07]}><boxGeometry args={[0.67, 0.008, 0.025]} /><meshStandardMaterial color="#b4bca9" /></mesh>)}
+        <group position={[0, 0.27, 0.24]} rotation={[0.18, 0, 0]}>
+          <mesh><boxGeometry args={[0.9, 0.58, 0.04]} /><meshStandardMaterial color="#4c514a" /></mesh>
+          <mesh position={[0, 0, -0.023]}><boxGeometry args={[0.81, 0.49, 0.005]} /><meshBasicMaterial color="#233832" /></mesh>
+          {Array.from({ length: 7 }, (_, row) => <mesh key={row} position={[-0.08 + row % 2 * 0.05, 0.17 - row * 0.055, -0.028]}><boxGeometry args={[0.36 + row % 3 * 0.1, 0.016, 0.003]} /><meshBasicMaterial color={row % 2 ? "#b8d9aa" : "#8fc7d3"} /></mesh>)}
+        </group>
       </group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
         <ringGeometry args={[0.55, selected ? 0.6 : 0.565, 40]} />

@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, open } from "node:fs/promises";
 import { join } from "node:path";
 
 export type AgentStatus = "running" | "stale" | "completed" | "failed" | "interrupted";
@@ -16,6 +16,7 @@ export type Agent = {
   heartbeatAt: string | null;
   toolCalls: number;
   lastTool: string | null;
+  lastToolAt?: string | null;
 };
 
 export type Snapshot = {
@@ -29,7 +30,7 @@ export type Snapshot = {
 type Options = { dir: string; gatewayFile: string; now?: number };
 
 // A running task whose transcript has been silent this long is shown as stale, not busy.
-const STALE_MS = 15 * 60_000;
+const STALE_MS = 120_000;
 const DESKS = 10;
 const LOG_BYTES = 256 * 1024;
 const TOOL = /^\d{2}:\d{2}:\d{2} tool +\| -> ([A-Za-z0-9_]+)\(/;
@@ -48,12 +49,18 @@ function safe(value: unknown): string {
 }
 
 async function readTail(file: string) {
-  const info = await stat(file);
-  const text = await readFile(file, "utf8");
-  return { text: text.length > LOG_BYTES ? text.slice(-LOG_BYTES) : text, modified: info.mtimeMs };
+  const handle = await open(file, "r");
+  try {
+    const info = await handle.stat();
+    const size = Math.min(info.size, LOG_BYTES);
+    const buffer = Buffer.alloc(size);
+    const {bytesRead} = await handle.read(buffer, 0, size, Math.max(0, info.size-size));
+    return {text:buffer.subarray(0,bytesRead).toString("utf8"),modified:info.mtimeMs};
+  } finally { await handle.close(); }
 }
 
-function parseLog(text: string) {
+function parseLog(text: string, modified: number) {
+  let lastToolAt: string | null = null;
   let toolCalls = 0;
   let lastTool: string | null = null;
   let lastEvent: string | null = null;
@@ -62,17 +69,23 @@ function parseLog(text: string) {
     if (tool) {
       toolCalls++;
       lastTool = tool[1];
+      const day = new Date(modified).toISOString().slice(0,10);
+      let stamp = Date.parse(day+"T"+line.slice(0,8)+"Z");
+      if (stamp > modified + 1000) stamp -= 86400000;
+      lastToolAt = new Date(stamp).toISOString();
     }
     const event = EVENT.exec(line);
     if (event) lastEvent = event[1];
   }
-  return { toolCalls, lastTool, lastEvent };
+  return { toolCalls, lastTool, lastEvent, lastToolAt };
 }
 
-function activityOf(status: AgentStatus, lastEvent: string | null): Activity {
+function activityOf(status: AgentStatus, lastEvent: string | null, lastToolAt: string | null, now: number): Activity {
   if (status !== "running") return status === "stale" ? "waiting" : "done";
   if (lastEvent === "think" || lastEvent === "assistant") return "thinking";
   if (lastEvent === "tool") return "tool";
+  const age = lastToolAt ? now-Date.parse(lastToolAt) : Infinity;
+  if (lastEvent === "result" && age >= 0 && age <= 8000) return "tool";
   return "waiting";
 }
 
@@ -115,7 +128,7 @@ export async function readSnapshot({ dir, gatewayFile, now = Date.now() }: Optio
       try {
         log = await readTail(join(dir, entry, `task-${index}.log`));
       } catch {}
-      const parsed = parseLog(log.text);
+      const parsed = parseLog(log.text, log.modified);
       const raw = typeof task.status === "string" ? task.status : "failed";
       let status: AgentStatus =
         raw === "running" ? "running" : raw === "completed" ? "completed" : raw === "interrupted" ? "interrupted" : "failed";
@@ -126,13 +139,14 @@ export async function readSnapshot({ dir, gatewayFile, now = Date.now() }: Optio
         run,
         task: index,
         status,
-        activity: activityOf(status, parsed.lastEvent),
+        activity: activityOf(status, parsed.lastEvent, parsed.lastToolAt, now),
         model: safe(manifest.model),
         startedAt: isoTime(manifest.started),
         endedAt: isoTime(manifest.completed),
         heartbeatAt: log.modified ? new Date(log.modified).toISOString() : null,
         toolCalls: parsed.toolCalls,
         lastTool: parsed.lastTool,
+        lastToolAt: parsed.lastToolAt,
       });
     }
   }

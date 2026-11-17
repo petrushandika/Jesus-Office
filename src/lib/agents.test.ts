@@ -85,6 +85,18 @@ test("limits desks to the ten most recent tasks", async () => {
   assert.equal(snap.gateway, null);
 });
 
+test("recent completed tool observation persists briefly, then becomes waiting", async () => {
+  const root = await fixture();
+  const file = join(root, 'deleg_live', 'task-0.log');
+  await writeFile(file, '06:59:57 tool     | -> patch(secret-file)\n06:59:58 result   | patch ok');
+  await utimes(file, new Date(NOW - 2000), new Date(NOW - 2000));
+  const options = {dir:root,gatewayFile:join(root,'missing'),now:NOW};
+  const recent = (await readSnapshot(options)).agents[0];
+  assert.equal(recent.activity, 'tool');
+  assert.equal(recent.lastToolAt, '2026-11-13T06:59:57.000Z');
+  assert.equal((await readSnapshot({...options,now:NOW+10000})).agents[0].activity,'waiting');
+});
+
 test("reports an unavailable source instead of fabricating agents", async () => {
   const snap = await readSnapshot({ dir: "/nonexistent/jesus-office", gatewayFile: "/nonexistent/g.json", now: NOW });
   assert.equal(snap.available, false);
