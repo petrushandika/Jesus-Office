@@ -88,8 +88,8 @@ test('stop, completion, offline and expiry freeze the exact current world positi
     const frozen = c.update(50, stopped, now);
     assert.deepEqual(frozen.position, moving.position);
     assert.equal(frozen.traveling, false);
-    assert.equal(frozen.leftHand, 0);
-    assert.equal(frozen.leftStride, 0);
+    assert.equal(frozen.leftHand, moving.leftHand);
+    assert.equal(frozen.leftStride, moving.leftStride);
     assert.deepEqual(c.update(100, stopped, now).position, frozen.position);
   }
   const c = createLiveController('matius');
