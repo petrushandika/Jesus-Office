@@ -10,6 +10,7 @@ export type LivePose = Omit<ReturnType<typeof roomPoseAt>, 'phase'> & {
 export type LiveState = {
   id: string; position: Point; heading: number; route: Point[] | null; distance: number;
   fromRoom: string; toRoom: string; event: string; clock: number;
+  worker?: string; lastPose?: LivePose;
 };
 
 /** World-space footprint, independent of animation phase or persona identity. */
@@ -66,8 +67,12 @@ function poseOf(state: LiveState, agent: Agent | undefined, active: boolean): Li
 export function updateLiveState(previous: LiveState, deltaSeconds: number, agent: Agent | undefined, nowMs: number): { state: LiveState; pose: LivePose } {
   const state: LiveState = { ...previous, position: [...previous.position] };
   const active = isLiveAgent(agent, nowMs);
-  if (!active) return { state, pose: poseOf(state, agent, false) };
-  const event = JSON.stringify([agent!.id, agent!.run, agent!.lastTool ? category(agent!.lastTool) : null]);
+  if (!active) return { state, pose: state.lastPose ? {...state.lastPose, active:false, traveling:false, phase:'idle', agentId:agent?.id??null, run:agent?.run??null, heartbeatAt:agent?.heartbeatAt??null} : poseOf(state, agent, false) };
+  const worker = JSON.stringify([agent!.id,agent!.run]);
+  if (state.worker !== worker) {
+    state.worker=worker; state.route=null; state.distance=0; state.event='';
+  }
+  const event = JSON.stringify([worker, agent!.lastTool, agent!.lastToolAt??null, agent!.toolCalls]);
   if (agent!.activity === 'tool' && event !== state.event) {
     state.event = event; // Consume in-flight observations, never queue invisible future trips.
     if (!state.route && agent!.lastTool) {
@@ -77,7 +82,7 @@ export function updateLiveState(previous: LiveState, deltaSeconds: number, agent
       const route = routeBetween(from.id, target);
       // After a visit, exit past the front of the table before reaching the home/door axis.
       const atHome = Math.hypot(state.position[0] - from.home[0], state.position[2] - from.home[2]) < 1e-8;
-      state.route = atHome ? route : [state.position,
+      state.route = source === 'central-lane' ? [state.position, [state.position[0],0,0], [roomFor(target).center[0],0,0], ...route.slice(4)] : atHome ? route : [state.position,
         [state.position[0], 0, from.home[2] - Math.sign(from.home[2]) * 1.1],
         [from.home[0], 0, from.home[2] - Math.sign(from.home[2]) * 1.1], ...route.slice(1)];
       state.distance = 0;
@@ -98,7 +103,9 @@ export function updateLiveState(previous: LiveState, deltaSeconds: number, agent
       state.heading = roomFor(state.toRoom).facing;
     }
   }
-  return { state, pose: poseOf(state, agent, true) };
+  const pose = poseOf(state, agent, true);
+  state.lastPose=pose;
+  return { state, pose };
 }
 /** Retain one controller per stable visual slot, not per incoming snapshot. */
 export function createLiveController(id: string) {

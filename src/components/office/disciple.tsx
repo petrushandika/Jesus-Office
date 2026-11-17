@@ -109,8 +109,8 @@ export function Disciple({ persona, agent, position, rotation = 0, selected, red
     elapsed.current += step;
     resume.current = false;
     const pose = controller.update(step, agent, Date.now());
-    if (laptop.current) laptop.current.visible = pose.active && !pose.traveling;
-    if (!reducedMotion || !initialized.current) {
+    if ((!reducedMotion && pose.active) || !initialized.current) {
+      if (laptop.current) laptop.current.visible = pose.active && !pose.traveling;
       initialized.current = true;
       if (traveler.current) {
         traveler.current.position.set(pose.position[0] - position[0], pose.position[1] - position[1], pose.position[2] - position[2]);
@@ -151,7 +151,7 @@ export function Disciple({ persona, agent, position, rotation = 0, selected, red
         }
       }
     }
-    if (!reducedMotion) initialized.current = false;
+
     if (probe.current && state.clock.elapsedTime - lastProbe.current >= 0.2 && traveler.current && body.current) {
       lastProbe.current = state.clock.elapsedTime;
       traveler.current.updateWorldMatrix(true, true);
@@ -162,6 +162,7 @@ export function Disciple({ persona, agent, position, rotation = 0, selected, red
         world: traveler.current.getWorldPosition(point).toArray(), room: pose.room,
         traveling: pose.traveling, fromRoom: pose.fromRoom, toRoom: pose.toRoom,
         heading: traveler.current.rotation.y, role: persona.role,
+        transforms: [traveler,body,head,leftFoot,rightFoot,leftArm,rightArm,leftForearm,rightForearm,leftHand,rightHand,folds].map(ref => ref.current ? {position:ref.current.position.toArray(),quaternion:ref.current.quaternion.toArray(),scale:ref.current.scale.toArray()} : null),
         conversing: false, speechVisible: false,
         laptopVisible: laptop.current?.visible ?? false,
         turn: head.current?.rotation.y ?? 0, gesture: leftArm.current?.rotation.z ?? 0,
