@@ -1,7 +1,7 @@
 # Jesus Office
 
 ## Approved experience
-Edge-to-edge dynamic viewport ancient city inspired by Nazareth/Jerusalem. Zero visible text, including loading, selection, mesh lettering and tooltips. No cards, arrows, roster, telemetry, project catalog or company branding. Nonvisual ARIA names remain. Left drag/one finger pans; right drag/two-finger rotation orbits; wheel/pinch zooms. Keyboard arrows, +/-, 0 reset, Enter selection ring, Escape clear.
+Edge-to-edge dynamic viewport ancient city inspired by Nazareth/Jerusalem. Zero visible text, including loading, selection, mesh lettering and tooltips. No cards, arrows, roster, telemetry, project catalog or company branding. Nonvisual ARIA names remain. Left drag/one finger orbits; right drag/two fingers pans; wheel/pinch zooms. Initial overview fits the complete authored town in portrait and landscape. Resizing preserves relative zoom and angle. Keyboard arrows, +/-, 0 reset, Enter selection ring, Escape clear.
 
 ## Space and architecture
 Real perspective camera with an oblique town overview, 360-degree horizontal orbit and near-top-down to near-ground inspection. No artificial ground-target or zoom-out boundary. View-following ground and adaptive far plane avoid exposing the old rectangular terrain edge. Minimum camera distance and above-ground tilt are deliberate clipping guards. Authored buildings remain finite, not infinitely generated.

@@ -11,6 +11,7 @@ import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { Disciple } from "./disciple";
 import { CityLandmarks, LANDMARK_PLACEMENTS } from "./city-landmarks";
 import { CityNpcs } from "./city-npcs";
+import { CITY_CORNERS, CITY_VIEW, fitCityDistance } from "@/lib/camera-fit";
 import { ROOMS, roomFor, type Room } from "@/lib/room-choreography";
 
 export type CameraAction = { kind: "zoom-in" | "zoom-out" | "reset" | "north" | "south" | "east" | "west"; serial: number };
@@ -84,17 +85,29 @@ function Stones({ blocks, palette = STONE }: { blocks: { at: Point; size: Point;
 // Three's camera/renderer are imperative objects, not immutable React state.
 /* eslint-disable react-hooks/immutability */
 function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; inspectScene: boolean; paused: boolean }) {
-  const { camera, gl, invalidate } = useThree();
+  const { camera, gl, invalidate, size } = useThree();
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const consumed = useRef<number | null>(null);
   // Logical zoom is dolly distance relative to this home view, never camera.zoom.
-  const baseDistance = 58;
+  const baseDistance = fitCityDistance(size.width / size.height);
+  const previousFit = useRef<number | null>(null);
   const publish = useCallback(() => {
     if (!inspectScene || !controls.current) return;
+    camera.updateMatrixWorld();
     gl.domElement.dataset.mapCamera = JSON.stringify({ cameraType: camera.type,
       zoom: baseDistance / camera.position.distanceTo(controls.current.target),
-      target: controls.current.target.toArray(), position: camera.position.toArray() });
-  }, [inspectScene, gl, camera]);
+      target: controls.current.target.toArray(), position: camera.position.toArray(),
+      framing: CITY_CORNERS.map(c => new Vector3(...c).project(camera).toArray()) });
+  }, [inspectScene, gl, camera, baseDistance]);
+  useEffect(() => {
+    const orbit = controls.current;
+    if (!orbit) return;
+    const offset = previousFit.current === null ? new Vector3(...CITY_VIEW).normalize().multiplyScalar(baseDistance)
+      : camera.position.clone().sub(orbit.target).multiplyScalar(baseDistance / previousFit.current);
+    camera.position.copy(orbit.target).add(offset);
+    previousFit.current = baseDistance;
+    camera.updateProjectionMatrix(); orbit.update(); camera.updateMatrixWorld(); publish(); invalidate();
+  }, [baseDistance, camera, invalidate, publish]);
   useEffect(() => {
     if (!inspectScene) return;
     gl.domElement.dataset.mapWorld = JSON.stringify(MAP_WORLD);
@@ -110,7 +123,7 @@ function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; in
     consumed.current = action.serial;
     if (action.kind === "reset") {
       orbit.target.set(0, 0, 0);
-      camera.position.set(16.64525283848835, 43.5, -34.56422367047748);
+      camera.position.copy(new Vector3(...CITY_VIEW).normalize().multiplyScalar(baseDistance));
     } else if (action.kind === "zoom-in" || action.kind === "zoom-out") {
       const offset = camera.position.clone().sub(orbit.target);
       const distance = Math.max(2, offset.length() * (action.kind === "zoom-in" ? 0.8 : 1.25));
@@ -123,10 +136,10 @@ function MapCamera({ action, inspectScene, paused }: { action?: CameraAction; in
       camera.position.x += dx; camera.position.z += dz;
     }
     camera.updateProjectionMatrix(); orbit.update(); publish(); invalidate();
-  }, [action, camera, invalidate, publish]);
+  }, [action, baseDistance, camera, invalidate, publish]);
   return <OrbitControls ref={controls} makeDefault target={[0, 0, 0]} enablePan enableZoom enableRotate
-    mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }}
-    touches={{ ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_ROTATE }}
+    mouseButtons={{ LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }}
+    touches={{ ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }}
     screenSpacePanning={false} minDistance={2} maxDistance={Infinity}
     minPolarAngle={0.05} maxPolarAngle={Math.PI / 2 - 0.06}
     enableDamping={!paused} dampingFactor={0.12} onChange={() => {
