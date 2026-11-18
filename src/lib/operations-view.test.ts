@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { describeTask, excerpt, reportBlocks } from './operations-view.ts';
+import { describeTask, excerpt, reportBlocks, taskBrief } from './operations-view.ts';
 
 test('task titles are split into a readable title and quiet metadata', () => {
   assert.deepEqual(describeTask({ source: 'jira', title: 'OPI-1005: [WEB] Tambah riwayat aktivitas pada menu artikel terbit' }),
@@ -85,4 +85,11 @@ test('"Label: value" evidence lines become fields; URLs are not mistaken for lab
 
 test('excerpt masks e-mail addresses', () => {
   assert.equal(excerpt('## Ringkasan\nPembeli (ntschristian@gmail.com) tidak bisa memutar video.'), 'Pembeli (n…@gmail.com) tidak bisa memutar video.');
+});
+
+test('short task brief is separated from the technical evidence', () => {
+  const report = '# Title\n## Inti\nJudul: Video terkunci\nMasalah: Pembeli tidak bisa menonton.\nTarget: Video bisa diputar.\nKondisi sekarang: Belum teruji.\nUsulan: Cek akses.\n\n## Analisis\nTechnical content';
+  assert.equal(taskBrief(report)?.Judul, 'Video terkunci');
+  assert.equal(taskBrief(report)?.Target, 'Video bisa diputar.');
+  assert.equal(taskBrief('## Inti\nJudul: Incomplete'), null);
 });

@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { describeTask, excerpt, reportBlocks } from '../../lib/operations-view';
+import { describeTask, excerpt, reportBlocks, taskBrief } from '../../lib/operations-view';
 
 type Task = { id: string; title: string; source: string; source_url?: string; status: string; report: unknown; report_hash: string | null; created_at: string; updated_at: string; decision: unknown; execution_report: unknown; error?: string | null };
 type Connector = { name: string; status: string; detail: string };
@@ -15,8 +15,8 @@ function sourceLink(value?: string) {
 }
 const clock = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 const when = (iso: string) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? '' : clock.format(date).replace(',', ' ·') + ' WIB'; };
-const CONNECTOR_NAMES: Record<string, string> = { github: 'GitHub Actions', jira: 'Jira', techcare: 'Techcare', 'astronacci-9router': 'Astronacci 9Router', email: 'Email' };
-const CONNECTOR_STATES: Record<string, string> = { ok: 'Working', error: 'Failing', off: 'Not set up' };
+const CONNECTOR_NAMES: Record<string, string> = { github: 'GitHub projects', local: 'Local projects', jira: 'Jira', techcare: 'Techcare', 'astronacci-9router': 'Astronacci 9Router', email: 'Email' };
+const CONNECTOR_STATES: Record<string, string> = { ok: 'Working', error: 'Failing', off: 'Not set up', partial: 'Partial coverage', unavailable: 'Unavailable' };
 const WAITING = ['waiting_approval', 'awaiting_approval', 'pending_approval'];
 const ACTIVE = ['queued', 'analyzing', 'approved', 'executing', 'running'];
 const STATUS_WORDS: Record<string, string> = { queued: 'Queued', analyzing: 'Writing report', approved: 'Approved, starting', executing: 'Following up', running: 'Running', completed: 'Done', rejected: 'Rejected', failed: 'Failed' };
@@ -105,11 +105,6 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
     catch { setMessage('Sign out failed. Try again.'); }
     finally { setBusy(false); }
   }
-  async function addTask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; const values = new FormData(form);
-    const source_url = String(values.get('source_url') ?? '').trim();
-    if (await mutate('tasks', { title: values.get('title'), description: values.get('description'), source: 'manual', ...(source_url ? { source_url } : {}) })) form.reset();
-  }
   async function decide(task: Task, decision: 'approve' | 'reject') {
     const name = describeTask(task).title;
     if (!task.report_hash || !window.confirm(decision === 'approve'
@@ -129,7 +124,7 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
 
   if (!signedIn) return <>
     {crumbs()}
-    {hero('Agents read GitHub, Jira and Techcare, write a report, then wait for you. Sign in to read and decide.')}
+    {hero('Agents check GitHub, local projects, Jira and Techcare, write a report, then wait for you. Sign in to read and decide.')}
     <form className="ops-signin" onSubmit={login}>
       <label htmlFor="operator-password">Password</label>
       <div className="ops-signin-row">
@@ -146,24 +141,26 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
   const active = tasks.filter(task => ACTIVE.includes(task.status) && !waiting.includes(task));
   const finished = tasks.filter(task => !waiting.includes(task) && !active.includes(task));
   const lede = !snapshot ? 'Loading the queue…'
-    : waiting.length === 0 ? 'Nothing is waiting for you. New reports from GitHub, Jira and Techcare land here first.'
-    : `${waiting.length} report${waiting.length === 1 ? ' is' : 's are'} waiting for your decision. Nothing runs until you approve it.`;
+    : waiting.length === 0 ? 'Nothing is waiting for you. New findings from GitHub, local projects, Jira and Techcare land here first.'
+    : `${waiting.length} report${waiting.length === 1 ? ' is' : 's are'} waiting for your decision. Follow-up waits for your approval.`;
 
   const card = (task: Task) => {
     const view = describeTask(task), link = sourceLink(task.source_url), text = plain(task.report);
     const isWaiting = waiting.includes(task);
-    const summary = text ? excerpt(text) : '';
+    const brief = taskBrief(text);
+    const summary = brief ? '' : text ? excerpt(text) : '';
     const meta = [...view.meta];
     if (!isWaiting) meta.push(STATUS_WORDS[task.status] ?? task.status.replace(/_/g, ' '));
     return <article key={task.id} className="ops-task" data-status={task.status}>
       <p className="ops-task-meta"><span className="ops-task-tags">{meta.map((part, index) => <span key={index}>{part}</span>)}</span><time dateTime={task.created_at}>{when(task.created_at)}</time></p>
-      <h3>{view.title}</h3>
+      <h3>{brief?.Judul || view.title}</h3>
+      {brief && <dl className="ops-brief">{['Masalah', 'Target', 'Kondisi sekarang', 'Usulan'].filter(key => brief[key]).map(key => <div key={key}><dt>{key}</dt><dd>{brief[key]}</dd></div>)}</dl>}
       {summary && <p className="ops-task-summary">{summary}</p>}
       {task.error && <p className="ops-task-error">Last attempt failed: {task.error}</p>}
       {!text && <p className="ops-task-summary">The report is being written.</p>}
       {text && <details>
         <summary>{isWaiting ? 'Read the report and decide' : 'Read the report'}</summary>
-        <Report text={text} />
+        <Report text={brief ? text.replace(/^## Inti\s*\n[\s\S]*?(?=^## |$(?![\s\S]))/m, '') : text} />
         {isWaiting && <div className="ops-decision">
           <div className="ops-decision-actions">
             <button className="ops-primary" disabled={busy} onClick={() => void decide(task, 'approve')}>Approve follow-up</button>
@@ -200,22 +197,6 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
       {group('task-list-title', 'Waiting for you', waiting, 'Nothing is waiting for you. New reports appear here.')}
       {group('active-title', 'In progress', active)}
       {group('done-title', 'Decided', finished)}
-
-      <section className="ops-section ops-split" aria-labelledby="add-title">
-        <div>
-          <h2 id="add-title">Ask for an investigation</h2>
-          <p className="ops-side">The agents read the sources you mention and write a report. Nothing runs until you approve it.</p>
-        </div>
-        <form className="ops-form" onSubmit={addTask}>
-          <label htmlFor="task-title">Title</label>
-          <input id="task-title" name="title" maxLength={200} required />
-          <label htmlFor="task-description">What should they look into?</label>
-          <textarea id="task-description" name="description" rows={4} maxLength={12000} required />
-          <label htmlFor="task-source-url">Link <span>optional</span></label>
-          <input id="task-source-url" name="source_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} />
-          <button className="ops-primary" type="submit" disabled={busy}>Queue for analysis</button>
-        </form>
-      </section>
 
       <section className="ops-section ops-split" aria-labelledby="system-title">
         <div>

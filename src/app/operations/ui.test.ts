@@ -29,3 +29,8 @@ test('decisions sit after the report, the queue is not a wall of identical butto
   const server = readFileSync(new URL('../../../operations/server.py', import.meta.url), 'utf8');
   assert.doesNotMatch(server, /Intake otomatis|MENUNGGU|Belum aktif/, 'capabilities are written in the UI language');
 });
+
+test('automatic intake has no manual task form', () => {
+  const ui = source('./operations-panel.tsx');
+  assert.doesNotMatch(ui, /addTask|task-description|Queue for analysis|Ask for an investigation/);
+});

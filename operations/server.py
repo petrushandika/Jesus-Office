@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from store import Store  # noqa: E402
 
 CAPABILITIES = [
-    {'text': 'Every 15 minutes, read failed GitHub Actions runs in the allowed repositories, your open Jira issues and your Techcare tickets.', 'active': True},
+    {'text': 'Every 15 minutes, scan a rotating batch of accessible GitHub projects for failed runs, open issues and permitted security alerts. Local projects are checked read-only; Jira and Techcare remain connected.', 'active': True},
+    {'text': 'Coverage is limited to accessible sources and explicit checks, not a guarantee that every bug is found. Unavailable permissions and offline local projects are reported. TradeGenZ is excluded.', 'active': True},
     {'text': 'Analyse each one with the Astronacci 9Router model and write a report. Work stops there until you decide.', 'active': True},
     {'text': 'After approval, read job logs and ticket comments, then draft an implementation plan. Read-only.', 'active': True},
     {'text': 'Not available yet: writing code, opening pull requests, updating tickets, deploying. Each will need its own approval.', 'active': False},
@@ -72,13 +73,7 @@ def make_server(store, token, worker, port=18160, operator='operator'):
             except (ValueError, json.JSONDecodeError):
                 return self._send(400)
             if self.path == '/tasks':
-                title, desc, url = data.get('title'), data.get('description'), data.get('source_url')
-                if (data.get('source') != 'manual' or not isinstance(title, str) or not isinstance(desc, str)
-                        or not title.strip() or not desc.strip() or len(title) > 200 or len(desc) > 12000
-                        or (url is not None and (not isinstance(url, str) or not re.match(r'^https?://', url) or len(url) > 2048))):
-                    return self._send(400)
-                tid = store.add_task('manual', 'manual:' + os.urandom(8).hex(), 'audit', title.strip(), desc.strip(), url)
-                return self._send(201, {'id': tid})
+                return self._send(405, {'error': 'automatic intake only'})
             if self.path == '/pause':
                 if not isinstance(data.get('paused'), bool):
                     return self._send(400)
@@ -99,7 +94,7 @@ def make_server(store, token, worker, port=18160, operator='operator'):
 def main():
     from llm import LLM
     from mailer import Mailer
-    from sources import Sources
+    from connectors import Connectors
     from worker import Worker
     env = os.environ
     data = env.get('OFFICE_OPS_DATA') or sys.exit('OFFICE_OPS_DATA missing')
@@ -108,7 +103,7 @@ def main():
     llm = LLM(env.get('OFFICE_LLM_BASE_URL', ''), env.get('OFFICE_LLM_API_KEY', ''), env.get('OFFICE_LLM_MODEL', ''),
               int(env.get('OFFICE_LLM_MAX_PER_HOUR', '20')))
     operator = env.get('OFFICE_OPERATOR_ID', 'operator')
-    worker = Worker(store, llm, Sources(env), Mailer(env), operator=operator,
+    worker = Worker(store, llm, Connectors(env, store), Mailer(env), operator=operator,
                     poll_seconds=int(env.get('OFFICE_POLL_SECONDS', '900')))
     httpd = make_server(store, env.get('OFFICE_OPS_TOKEN', ''), worker, int(env.get('OFFICE_OPS_PORT', '18160')), operator)
     stop = threading.Event()

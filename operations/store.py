@@ -133,6 +133,18 @@ class Store:
         self.event(tid, 'report_ready', digest)
         return digest
 
+    def replace_report(self, tid, expected_hash, report):
+        """Swap an undecided awaiting report for a new version. The new hash invalidates the old one."""
+        digest = hashlib.sha256(('%s\n%s' % (tid, report)).encode()).hexdigest()
+        with self.lock:
+            cur = self.db.execute("UPDATE tasks SET report=?, report_hash=?, updated_at=? WHERE id=? AND report_hash=?"
+                                  " AND status='awaiting_approval' AND decision IS NULL",
+                                  (report, digest, now_iso(), tid, expected_hash))
+            if cur.rowcount != 1:
+                return None
+        self.event(tid, 'report_revised', '%s -> %s' % (expected_hash[:12], digest[:12]))
+        return digest
+
     def decide(self, tid, decision, report_hash, operator):
         if decision not in ('approve', 'reject'):
             return 'invalid'

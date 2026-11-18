@@ -101,6 +101,55 @@ class SafetyTests(unittest.TestCase):
         self.assertNotIn('AB', text)
 
 
+class BriefLLM(FakeLLM):
+    def chat(self, system, user, max_tokens=1200):
+        self.calls.append((system, user))
+        return ('## Inti\n'
+                '- **Judul:** Video bundling terkunci untuk pembeli\n'
+                'Masalah: Pembeli BUNDLING PEMULA (ntschristian@gmail.com) tidak bisa memutar video `Ultimate`.\n'
+                'Target: Semua video dalam bundling bisa diputar oleh pembeli yang sudah bayar.\n'
+                'Kondisi sekarang: Tiket sudah Done tetapi belum ada bukti perbaikan.\n'
+                'Usulan: Cek hak akses akun pembeli di admin sebelum mengubah kode.\n\n'
+                '## Ringkasan\nIsi analisis panjang.')
+
+
+class BriefTests(unittest.TestCase):
+    def test_analysis_brief_moves_to_top_clean_and_masked(self):
+        from worker import split_brief, render_brief
+        brief, rest = split_brief(BriefLLM().chat('', ''))
+        self.assertEqual(brief['Judul'], 'Video bundling terkunci untuk pembeli')
+        self.assertEqual(brief['Masalah'], 'Pembeli BUNDLING PEMULA (n…@gmail.com) tidak bisa memutar video Ultimate.')
+        self.assertNotIn('## Inti', rest); self.assertIn('## Ringkasan', rest)
+        self.assertTrue(render_brief(brief).startswith('## Inti\nJudul: Video bundling'))
+
+    def test_incomplete_or_long_brief(self):
+        from worker import split_brief
+        self.assertIsNone(split_brief('## Inti\nJudul: x\n## Ringkasan\ny')[0])
+        brief, _ = split_brief('## Inti\nJudul: a\nMasalah: ' + 'kata ' * 80 + '\nTarget: b\n')
+        self.assertLessEqual(len(brief['Masalah']), 200); self.assertTrue(brief['Masalah'].endswith('…'))
+
+    def test_worker_report_starts_with_brief(self):
+        s = fresh(); w = Worker(s, BriefLLM(), FakeSources(), FakeMailer())
+        tid = s.add_task('jira', 'jira:OPI-1', 'task', 'OPI-1: [WEB] Judul panjang', 'd'); w.tick()
+        report = s.get(tid)['report']
+        self.assertLess(report.index('## Inti'), report.index('## Analisis'))
+        self.assertEqual(report.count('## Inti'), 1)
+
+    def test_brief_backfill_is_bound_to_the_unchanged_awaiting_report(self):
+        from worker import add_brief
+        s = fresh(); tid = s.add_task('manual', 'manual:b', 'audit', 'T', 'd')
+        s.claim('queued', 'analyzing'); old = s.set_report(tid, '# Laporan awal: T\n\nSumber: manual\n\n## Analisis (x)\nisi')
+        new_report = add_brief(s.get(tid)['report'], {'Judul': 'J', 'Masalah': 'M', 'Target': 'T'})
+        self.assertIn('## Inti\nJudul: J', new_report)
+        self.assertLess(new_report.index('## Inti'), new_report.index('## Analisis'))
+        self.assertIsNone(s.replace_report(tid, 'f' * 64, new_report))
+        new_hash = s.replace_report(tid, old, new_report)
+        self.assertNotEqual(new_hash, old); self.assertEqual(s.get(tid)['report_hash'], new_hash)
+        self.assertEqual(s.decide(tid, 'approve', old, 'p'), 'conflict')  # old version can no longer be approved
+        s.decide(tid, 'approve', new_hash, 'p')
+        self.assertIsNone(s.replace_report(tid, new_hash, new_report + 'x'))  # decided reports never change
+
+
 class WorkerTests(unittest.TestCase):
     def setUp(self):
         self.s = fresh(); self.llm = FakeLLM(); self.src = FakeSources(); self.mail = FakeMailer()
@@ -161,9 +210,9 @@ class ServerTests(unittest.TestCase):
 
     def test_create_and_decision_contract(self):
         status, body = self.call('/tasks', {'title': 'Audit repo', 'description': 'check', 'source': 'manual'})
-        self.assertEqual(status, 201); tid = body['id']
+        self.assertEqual(status, 405); tid = self.s.add_task('jira', 'jira:test-http', 'task', 't', 'd')
         self.assertEqual(self.call('/tasks/%s/decision' % tid, {'decision': 'approve', 'report_hash': 'a' * 64})[0], 409)
-        self.assertEqual(self.call('/tasks', {'title': 'x', 'description': 'y', 'source': 'jira'})[0], 400)
+        self.assertEqual(self.call('/tasks', {'title': 'x', 'description': 'y', 'source': 'jira'})[0], 405)
         status, data = self.call('/tasks'); self.assertIn('paused', data); self.assertIn('capabilities', data)
 
     def test_pause(self):
@@ -206,9 +255,10 @@ class IntakeTests(unittest.TestCase):
         s = fresh(); src = FakeSources(); w = Worker(s, FakeLLM(), src, FakeMailer())
         src.items = [dict(source='jira', source_key='jira:OPI-%d' % i, kind='task', title='t%d' % i, description='d') for i in range(10)]
         w.poll(); self.assertEqual(len(s.list_tasks()), 3)
-        w.poll(); self.assertEqual(len(s.list_tasks()), 3)  # backlog marked seen, not re-imported
+        src.items = []
+        w.poll(); self.assertEqual(len(s.list_tasks()), 8)  # persisted overflow is not lost
         src.items.insert(0, dict(source='jira', source_key='jira:OPI-99', kind='task', title='new', description='d'))
-        w.poll(); self.assertEqual(len(s.list_tasks()), 4)
+        w.poll(); self.assertEqual(len(s.list_tasks()), 11)
 
 
 if __name__ == '__main__':
