@@ -1,57 +1,30 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { CITY_NPCS, createCityNpcClock, sampleCityNpc } from "./city-npcs.ts";
-
-test("ten decorative citizens stay in separated exterior corridor routes", () => {
-  assert.equal(CITY_NPCS.length, 10);
-  const lanes = new Set<string>();
-  for (const npc of CITY_NPCS) {
-    assert.ok(npc.from >= -10 && npc.to <= 10 && npc.from < npc.to);
-    assert.ok(npc.z < 0 ? Math.abs(npc.z + 11) <= 0.351 : Math.abs(npc.z - 9.2) <= 0.351);
-    lanes.add(String(npc.z));
-    for (let time = 0; time <= 80; time += 0.05) {
-      const pose = sampleCityNpc(npc, time);
-      assert.ok(pose.position[0] >= npc.from && pose.position[0] <= npc.to);
-      assert.equal(pose.position[2], npc.z);
-      const next = sampleCityNpc(npc, time + 0.001);
-      assert.ok(Math.abs(next.position[0] - pose.position[0]) < 0.002);
-      assert.ok(Math.abs(next.heading - pose.heading) < 0.01);
-    }
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { CITY_NPCS, createCityNpcClock, sampleCityNpc } from './city-npcs.ts';
+test('ten citizens have routines distributed across five destinations, never agent identities', () => {
+ assert.equal(CITY_NPCS.length,10);
+ assert.ok(new Set(CITY_NPCS.map(n=>n.destination)).size>=5);
+ assert.ok(CITY_NPCS.some(n=>n.activity==='bathing'));
+ assert.ok(CITY_NPCS.some(n=>n.activity==='crafting'));
+ for(const npc of CITY_NPCS) {
+  const actions=new Set();let entered=false;
+  for(let t=0;t<70;t+=.1){
+   const p=sampleCityNpc(npc,t),next=sampleCityNpc(npc,t+.001);actions.add(p.activity);entered ||= p.indoors;
+   assert.ok(Math.hypot(...p.position.map((v,i)=>v-next.position[i]))<.01,'no teleport');
+   assert.ok(p.position.every(Number.isFinite));
+   assert.ok(Math.abs(p.position[0])>12||Math.abs(p.position[2])>20,'away from worker rooms');
   }
-  assert.equal(lanes.size, 10);
+  assert.ok(actions.has(npc.activity));assert.ok(actions.has('walking'));assert.ok(entered);
+ }
 });
-
-test("pause freezes elapsed time and every pose channel without resume catch-up", () => {
-  const clock = createCityNpcClock();
-  clock.advance(0.5, false);
-  const before = CITY_NPCS.map(npc => sampleCityNpc(npc, clock.advance(0, false)));
-  for (let frame = 0; frame < 50; frame++) clock.advance(10, true);
-  const after = CITY_NPCS.map(npc => sampleCityNpc(npc, clock.advance(0, true)));
-  assert.deepEqual(after, before);
-  assert.equal(clock.advance(100, false), 0.5);
-  assert.equal(clock.advance(0.1, false), 0.6);
+test('pause freezes elapsed time and pose channels without resume catch-up',()=>{
+ const c=createCityNpcClock();c.advance(.5,false);const before=CITY_NPCS.map(n=>sampleCityNpc(n,c.advance(0,false)));
+ for(let i=0;i<50;i++)c.advance(10,true);
+ assert.deepEqual(CITY_NPCS.map(n=>sampleCityNpc(n,c.advance(0,true))),before);assert.equal(c.advance(100,false),.5);assert.equal(c.advance(.1,false),.6);
 });
-
-test("destination pauses hold feet and gait still while turning continuously", () => {
-  const npc = { ...CITY_NPCS[0], offset: 0 };
-  for (const time of [8, 8.5, 9, 9.5]) {
-    const pose = sampleCityNpc(npc, time);
-    assert.equal(pose.position[0], npc.to);
-    assert.equal(pose.walking, false);
-    assert.equal(pose.leftLeg, 0);
-    assert.equal(pose.position[1], 0);
-  }
-});
-
-test("all routes clear the well, core rooms and each other", () => {
-  for (let time = 0; time < 40; time += 0.1) {
-    const poses = CITY_NPCS.map(npc => sampleCityNpc(npc, time));
-    for (const pose of poses) {
-      assert.ok(Math.hypot(pose.position[0] + 7, pose.position[2] - 11.2) > 1.9);
-      assert.ok(Math.abs(pose.position[2]) > 8);
-    }
-    for (let a = 0; a < poses.length; a++) for (let b = a + 1; b < poses.length; b++) {
-      assert.ok(Math.hypot(poses[a].position[0] - poses[b].position[0], poses[a].position[2] - poses[b].position[2]) > 0.9);
-    }
-  }
+test('bathing and crafting animate arms without walking',()=>{
+ for(const base of CITY_NPCS.filter(n=>['bathing','crafting'].includes(n.activity))){
+ const n={...base,offset:0};const a=sampleCityNpc(n,17),b=sampleCityNpc(n,18);
+ assert.equal(a.walking,false);assert.equal(a.activity,n.activity);assert.notEqual(a.leftArm,b.leftArm);assert.deepEqual(a.position,b.position);
+ }
 });

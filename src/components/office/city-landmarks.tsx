@@ -78,20 +78,25 @@ function CivicHall() {
 }
 
 function Bathhouse() {
-  return <>
+  return <group name="bath-pool" userData={{ interiorKind: 'bathing' }}>
     <BlockMesh at={[0, 0.2, 0]} size={[8.4, 0.4, 6.4]} />
-    <Drum at={[0, 1.8, 0]} radius={2.6} height={3.2} />
-    <Drum at={[0, 3.45, 0]} radius={2.75} height={0.25} color={pale} />
-    <Cap at={[0, 3.6, 0]} radius={2.6} />
-    {[-3.1, 3.1].map(x => <group key={x} position={[x, 0, 0]}>
-      <BlockMesh at={[0, 1.1, 0]} size={[1.8, 1.8, 4.2]} />
-      <Drum at={[0, 2.1, 0]} radius={1.05} height={0.3} color={pale} />
-      <Cap at={[0, 2.25, 0]} radius={1.05} color={clay} />
+    <BlockMesh at={[0, .2, 4]} size={[2.4, .4, 2]} color={pale} />
+    <Blocks blocks={[
+      {at:[-3.8,1.8,0],size:[.4,2.8,6]}, {at:[3.8,1.8,0],size:[.4,2.8,6]},
+      {at:[0,1.8,-2.9],size:[7.6,2.8,.4]},
+      {at:[-1.7,.85,0],size:[.25,.9,3.5]}, {at:[1.7,.85,0],size:[.25,.9,3.5]},
+      {at:[0,.85,-1.7],size:[3.5,.9,.25]},
+      {at:[-1.45,.85,1.7],size:[.5,.9,.25]}, {at:[1.45,.85,1.7],size:[.5,.9,.25]},
+    ]} color={pale} />
+    <BlockMesh at={[0,1.12,0]} size={[3.1,.06,3.1]} color={teal} />
+    <BlockMesh at={[0,3.2,-2.35]} size={[7.8,.25,1.4]} color={clay} />
+    <Cap at={[0,3.35,-2.35]} radius={.85} />
+    {[-2.9,2.9].map(x=><group key={x}>
+      <BlockMesh at={[x,.65,0]} size={[.65,.5,3.8]} color={earth}/>
+      <BlockMesh at={[x,.94,-.8]} size={[.5,.08,.8]} color={pale}/>
+      <Drum at={[x,.7,2.1]} radius={.32} height={.5} color={clay}/>
     </group>)}
-    <Blocks blocks={[-1.35, 1.35].map(x => ({ at: [x, 1.1, 2.65], size: [0.5, 1.8, 0.65] }))} />
-    <Vault at={[0, 2, 2.65]} />
-    <Drum at={[0, 5.8, 0]} radius={0.22} height={0.4} color={pale} />
-  </>;
+  </group>;
 }
 
 function Watchtower() {
@@ -117,10 +122,14 @@ function Market() {
   return <>
     <BlockMesh at={[0, 0.15, 0]} size={[8.8, 0.3, 5.2]} />
     <Blocks blocks={posts} color={earth} />
-    {[-2.4, 0, 2.4].map(x => <group key={x} position={[x, 0, 0]}>
+    {[-2.4, 2.4].map(x => <group key={x} position={[x, 0, 0]}>
       <mesh geometry={arch} scale={[0.88, 0.65, 5.5]} position={[0, 2.9, 0]} material={materials[clay]} castShadow receiveShadow />
       <Blocks blocks={[-1.5, 1.5].map(z => ({ at: [0, 0.85, z], size: [1.8, 1.1, 0.6] }))} color={pale} />
     </group>)}
+    <group name="market-produce" userData={{ interiorKind: 'shopping' }}>
+      <BlockMesh at={[0,.15,3.2]} size={[2.1,.3,1.8]} color={pale}/>
+      {[-2.4,2.4].flatMap(x=>[-.5,0,.5].map(dx=><mesh key={`${x}:${dx}`} geometry={foliage} material={materials[leaf]} position={[x+dx,1.53,1.5]} scale={[.2,.18,.23]} />))}
+    </group>
     <Blocks blocks={[-2, 2].map(z => ({ at: [0, 2.85, z], size: [8, 0.22, 0.25] }))} color={earth} />
   </>;
 }
@@ -168,13 +177,19 @@ function PotteryWorkshop() {
       { at: [-3.55, 1.6, 0], size: [0.45, 2.8, 4.7] },
       { at: [0.75, 1.6, -1], size: [0.45, 2.8, 2.5] },
     ]} />
-    <BlockMesh at={[-1.4, 3.05, -0.3]} size={[5.1, 0.3, 4.6]} color={clay} />
+    <BlockMesh at={[-1.4, 3.05, -1.8]} size={[5.1, 0.3, 1.4]} color={clay} />
+    <BlockMesh at={[-1.4,.2,3.3]} size={[2.2,.4,1.4]} color={pale}/>
+    <group name="pottery-wheel" userData={{ interiorKind: 'crafting' }}>
+      <Drum at={[-1.4,.65,-.85]} radius={.4} height={.5} color={earth}/>
+      <Drum at={[-1.4,.95,-.85]} radius={.58} height={.1} color={pale}/>
+      <Drum at={[-1.4,1.18,-.85]} radius={.2} height={.38} color={clay}/>
+    </group>
     <Blocks blocks={[-3.4, 0.6].map(x => ({ at: [x, 1.55, 2], size: [0.23, 2.7, 0.23] }))} color={earth} />
     <Drum at={[2.6, 1, 0]} radius={1.6} height={2} color={clay} />
     <Cap at={[2.6, 2, 0]} radius={1.6} color={clay} />
     <Drum at={[2.6, 3.45, 0]} radius={0.4} height={1.8} color={clay} />
     <Drum at={[2.6, 4.35, 0]} radius={0.52} height={0.2} color={pale} />
-    {[-2.4, -1.4, -0.4].map(x => <group key={x}>
+    {[-3, .1].map(x => <group key={x}>
       <Drum at={[x, 0.6, 1.3]} radius={0.3} height={0.65} color={clay} />
       <mesh position={[x, 0.95, 1.3]} rotation={[Math.PI / 2, 0, 0]} material={materials[clay]} castShadow>
         <torusGeometry args={[0.21, 0.075, 8, 16]} />
@@ -212,6 +227,17 @@ const buildings: ReactNode[] = [<CivicHall key="hall" />, <Bathhouse key="baths"
 
 export function CityLandmarks() {
   return <group name="city-landmarks" dispose={null}>
+    <group name="reading-porch" userData={{ interiorKind: 'reading' }} position={[-23,0,-19]}>
+      <BlockMesh at={[0,.3,3.5]} size={[3,.6,1.4]} color={pale}/>
+      <BlockMesh at={[0,1.35,2.7]} size={[2.4,.14,.6]} color={earth}/>
+      {[-.5,.5].map(x=><mesh key={x} geometry={cylinder} material={materials[pale]} position={[x,1.48,2.7]} rotation={[0,0,Math.PI/2]} scale={[.1,.7,.1]}/>)}
+    </group>
+    <group name="garden-rest" userData={{ interiorKind: 'resting' }} position={[-31.8,0,1]}>
+      <BlockMesh at={[0,.48,-.6]} size={[2,.18,.65]} color={earth}/>
+      <Blocks blocks={[-.8,.8].map(x=>({at:[x,.2,-.6],size:[.15,.4,.4]}))} color={earth}/>
+      <Blocks blocks={[-1,1].map(x=>({at:[x,1.6,-1.1],size:[.15,3.2,.15]}))} color={earth}/>
+      <BlockMesh at={[0,3.2,-.5]} size={[2.4,.12,2]} color={leaf}/>
+    </group>
     {LANDMARK_PLACEMENTS.map(({ kind, position }, i) => <group key={kind} name={`landmark:${kind}`} userData={{ buildingKind: kind }} position={[...position]}>
       {buildings[i]}
     </group>)}
