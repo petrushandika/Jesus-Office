@@ -30,6 +30,13 @@ test('decisions sit after the report, the queue is not a wall of identical butto
   assert.doesNotMatch(server, /Intake otomatis|MENUNGGU|Belum aktif/, 'capabilities are written in the UI language');
 });
 
+test('operations omits System details while keeping intake and approval controls', () => {
+  const ui = source('./operations-panel.tsx');
+  assert.doesNotMatch(ui, /system-title|ops-connectors|ops-capabilities|What the agents can do|Where reports come from/);
+  assert.match(ui, /Pause intake/);
+  assert.match(ui, /Approve follow-up/);
+});
+
 test('automatic intake has no manual task form', () => {
   const ui = source('./operations-panel.tsx');
   assert.doesNotMatch(ui, /addTask|task-description|Queue for analysis|Ask for an investigation/);

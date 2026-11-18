@@ -15,8 +15,6 @@ function sourceLink(value?: string) {
 }
 const clock = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 const when = (iso: string) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? '' : clock.format(date).replace(',', ' ·') + ' WIB'; };
-const CONNECTOR_NAMES: Record<string, string> = { github: 'GitHub projects', local: 'Local projects', jira: 'Jira', techcare: 'Techcare', 'astronacci-9router': 'Astronacci 9Router', email: 'Email' };
-const CONNECTOR_STATES: Record<string, string> = { ok: 'Working', error: 'Failing', off: 'Not set up', partial: 'Partial coverage', unavailable: 'Unavailable' };
 const WAITING = ['waiting_approval', 'awaiting_approval', 'pending_approval'];
 const ACTIVE = ['queued', 'analyzing', 'approved', 'executing', 'running'];
 const STATUS_WORDS: Record<string, string> = { queued: 'Queued', analyzing: 'Writing report', approved: 'Approved, starting', executing: 'Following up', running: 'Running', completed: 'Done', rejected: 'Rejected', failed: 'Failed' };
@@ -197,28 +195,6 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
       {group('task-list-title', 'Waiting for you', waiting, 'Nothing is waiting for you. New reports appear here.')}
       {group('active-title', 'In progress', active)}
       {group('done-title', 'Decided', finished)}
-
-      <section className="ops-section ops-split" aria-labelledby="system-title">
-        <div>
-          <h2 id="system-title">System</h2>
-          <p className="ops-side">Where reports come from, and what the agents are allowed to do. Everything stays read-only until a separate approval exists for each action.</p>
-        </div>
-        <div>
-          <dl className="ops-connectors">
-            {snapshot.connectors.map((connector, index) => <div key={index} data-state={connector.status}>
-              <dt>{CONNECTOR_NAMES[connector.name] ?? connector.name}</dt>
-              <dd><span className="ops-state">{CONNECTOR_STATES[connector.status] ?? connector.status}</span>{connector.detail}</dd>
-            </div>)}
-          </dl>
-          {snapshot.capabilities.length > 0 && <h3 className="ops-subhead">What the agents can do</h3>}
-          {snapshot.capabilities.length > 0 && <ul className="ops-capabilities">
-            {snapshot.capabilities.map((capability, index) => {
-              const item = typeof capability === 'string' ? { text: capability, active: true } : capability;
-              return <li key={index} className={item.active === false ? 'ops-off' : undefined}>{item.text}</li>;
-            })}
-          </ul>}
-        </div>
-      </section>
     </>}
   </div>;
 }
