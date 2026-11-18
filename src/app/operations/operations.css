@@ -103,11 +103,6 @@
 .ops-report td { padding: 8px 12px 8px 0; border-bottom: 1px solid #deded5; vertical-align: top; }
 .ops-page code { padding: .05em .3em; border-radius: 4px; background: #efeee6; color: #3f423b; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .84em; overflow-wrap: anywhere; }
 
-/* Two-column sections: heading and note on the left, content on the right. */
-.ops-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 32px 64px; padding-top: 40px; border-top: 1px solid #deded5; }
-.ops-split h2 { margin-bottom: 12px; }
-.ops-side { max-width: 36ch; font-size: 15px; line-height: 1.6; color: #5c5f56; }
-
 /* Forms. */
 .ops-form { display: grid; gap: 8px; }
 .ops-form label { margin-top: 10px; }
@@ -121,25 +116,6 @@
 .ops-page input:hover, .ops-page textarea:hover { border-color: #a3a598; }
 .ops-page input:focus, .ops-page textarea:focus { border-color: #354f78; outline: none; box-shadow: 0 0 0 3px rgba(53, 79, 120, .12); }
 
-/* System: plain definition rows, no nested cards. */
-.ops-connectors div { display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr); gap: 4px 24px; padding: 14px 0; border-bottom: 1px solid #deded5; }
-.ops-connectors div:first-child { padding-top: 0; }
-.ops-connectors dt { font-weight: 600; }
-.ops-connectors dd { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: start; gap: 2px 12px; font-size: 15px; color: #565b51; }
-.ops-state { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #242622; white-space: nowrap; }
-.ops-state::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #a3a598; }
-[data-state='ok'] .ops-state::before { background: #4f8a5b; }
-[data-state='error'] .ops-state { color: #8a3b2e; }
-[data-state='error'] .ops-state::before { background: #b5533f; }
-.ops-subhead { margin-top: 36px !important; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
-.ops-capabilities { display: grid; gap: 8px; margin-top: 12px !important; padding: 0; list-style: none; font-size: 15px; line-height: 1.6; color: #2f322c; }
-.ops-capabilities li { display: grid; grid-template-columns: 22px minmax(0, 1fr); }
-.ops-capabilities li::before { content: '–'; color: #66685f; }
-.ops-capabilities .ops-off { color: #66685f; font-style: italic; }
-
-@media (max-width: 860px) {
-  .ops-split { grid-template-columns: minmax(0, 1fr); }
-}
 @media (max-width: 700px) {
   .ops-shell { padding: 40px 18px 72px; }
   .ops-page h1 { margin-bottom: 16px; }
@@ -150,14 +126,12 @@
   .ops-actions .ops-small { min-height: 44px; }
   .ops-task h3 { font-size: 18px; }
   .ops-task summary { min-height: 44px; }
-  .ops-connectors dd { grid-template-columns: minmax(0, 1fr); }
   .ops-crumbs { margin-bottom: 32px; }
   .ops-hero { padding-bottom: 32px; margin-bottom: 36px; }
   .ops-section { margin-bottom: 56px; }
   .ops-task { padding: 18px 16px; border-radius: 16px; }
   .ops-signin-row { flex-direction: column; }
   .ops-signin-row button, .ops-decision-actions button { width: 100%; }
-  .ops-connectors div { grid-template-columns: minmax(0, 1fr); }
   .ops-report-item[data-depth='1'] { padding-left: 14px; }
   .ops-report-item[data-depth='2'] { padding-left: 28px; }
 }
@@ -167,5 +141,4 @@
 .ops-brief > div { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 12px; }
 .ops-brief dt { font-weight: 600; }
 .ops-brief dd { color: #565b51; }
-[data-state='partial'] .ops-state::before { background: #b08a3e; }
 @media (max-width: 700px) { .ops-brief > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
