@@ -30,7 +30,7 @@ fs.mkdirSync(out, { recursive: true });
     await page.waitForFunction(() => /Tasks \(\d+\)/.test(document.querySelector('#task-list-title')?.textContent || ''), null, { timeout: 20000 });
     report.taskHeading = await page.locator('#task-list-title').innerText();
     report.style = await page.evaluate(() => { const m = getComputedStyle(document.querySelector('main')); const b = getComputedStyle(document.querySelector('button')); return { background: m.backgroundColor, color: m.color, overflowY: m.overflowY, button: b.backgroundColor }; });
-    assert.equal(report.style.background, 'rgb(11, 18, 32)', 'dashboard stylesheet applied');
+    assert.equal(report.style.background, "rgb(247, 246, 240)", "dashboard stylesheet applied (portfolio paper)");
     assert.equal(report.style.overflowY, 'auto', 'dashboard scrolls despite fullscreen city body');
     report.connectors = await page.locator('section:has(h2:text("Connectors")) .ops-list li').allInnerTexts();
     await page.screenshot({ path: out + '/operations.png', fullPage: false });
