@@ -13,6 +13,20 @@ export type Block =
   | { type: 'quote'; text: string }
   | { type: 'table'; head: string[]; rows: string[][] };
 
+export type TaskPriority = { level: string; reason: string; basis: string };
+const PRIORITIES: Record<string, { label: string; rank: number }> = {
+  urgent: { label: 'Urgent', rank: 0 }, high: { label: 'High', rank: 1 },
+  untriaged: { label: 'Needs triage', rank: 2 }, normal: { label: 'Normal', rank: 3 }, low: { label: 'Low', rank: 4 },
+};
+export function priorityView(priority?: TaskPriority) {
+  const level = priority && Object.hasOwn(PRIORITIES, priority.level) ? priority.level : 'untriaged';
+  return { level, ...PRIORITIES[level], reason: priority?.reason || 'Belum ada bukti yang cukup untuk menentukan prioritas.',
+    basis: priority?.basis === 'source' ? 'Source priority' : priority?.basis === 'inferred' ? 'Suggested priority' : 'Not yet assessed' };
+}
+export function comparePriority(a: { priority?: TaskPriority; created_at: string }, b: { priority?: TaskPriority; created_at: string }) {
+  return priorityView(a.priority).rank - priorityView(b.priority).rank || a.created_at.localeCompare(b.created_at);
+}
+
 export function describeTask(task: TaskLike): TaskView {
   const title = task.title.trim();
   if (task.source === 'jira') {
@@ -25,6 +39,11 @@ export function describeTask(task: TaskLike): TaskView {
   }
   if (task.source === 'local') return { title, meta: ['Local project'], linkLabel: 'Evidence' };
   if (task.source === 'github') {
+    const finding = /^(run|issue|dependabot|code-scanning): ([\w.-]+\/[\w.-]+) · (.+)$/.exec(title);
+    if (finding) {
+      const names: Record<string, string> = { run: 'GitHub Actions', issue: 'GitHub Issues', dependabot: 'GitHub Dependabot', 'code-scanning': 'GitHub Code scanning' };
+      return { title: finding[3], meta: [names[finding[1]], finding[2]], linkLabel: 'Open on GitHub' };
+    }
     if (!title.startsWith('CI gagal:')) return { title, meta: ['GitHub'], linkLabel: 'Open on GitHub' };
     const parts = title.replace(/^CI gagal:\s*/, '').split(' · ');
     if (parts.length >= 3) {

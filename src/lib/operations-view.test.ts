@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { describeTask, excerpt, reportBlocks, taskBrief } from './operations-view.ts';
+import { describeTask, excerpt, reportBlocks, taskBrief, priorityView, comparePriority } from './operations-view.ts';
 
 test('task titles are split into a readable title and quiet metadata', () => {
   assert.deepEqual(describeTask({ source: 'jira', title: 'OPI-1005: [WEB] Tambah riwayat aktivitas pada menu artikel terbit' }),
@@ -92,4 +92,20 @@ test('short task brief is separated from the technical evidence', () => {
   assert.equal(taskBrief(report)?.Judul, 'Video terkunci');
   assert.equal(taskBrief(report)?.Target, 'Video bisa diputar.');
   assert.equal(taskBrief('## Inti\nJudul: Incomplete'), null);
+});
+
+test('priority display keeps unknown distinct from low and exposes basis', () => {
+  assert.equal(priorityView().label, 'Needs triage');
+  assert.equal(priorityView({ level: 'urgent', reason: 'Source priority', basis: 'source' }).label, 'Urgent');
+  assert.equal(priorityView({ level: 'low', reason: 'Low source priority', basis: 'source' }).label, 'Low');
+  assert.equal(priorityView({ level: 'made-up', reason: '', basis: 'unknown' }).level, 'untriaged');
+});
+test('priority order surfaces urgent then high then unknown, with stable oldest first ties', () => {
+  const tasks = ['low', 'normal', 'untriaged', 'high', 'urgent'].map((level, i) => ({ id: String(i), created_at: '2026-01-01', priority: { level, reason: '', basis: 'source' } }));
+  assert.deepEqual(tasks.sort(comparePriority).map(t => t.priority.level), ['urgent', 'high', 'untriaged', 'normal', 'low']);
+});
+test('current GitHub finding titles retain repository and finding type', () => {
+  const v = describeTask({ source: 'github', title: 'run: owner/repo · Deployment' });
+  assert.equal(v.title, 'Deployment');
+  assert.deepEqual(v.meta, ['GitHub Actions', 'owner/repo']);
 });

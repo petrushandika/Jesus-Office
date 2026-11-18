@@ -2,9 +2,9 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { describeTask, excerpt, reportBlocks, taskBrief } from '../../lib/operations-view';
+import { describeTask, excerpt, reportBlocks, taskBrief, priorityView, comparePriority, type TaskPriority } from '../../lib/operations-view';
 
-type Task = { id: string; title: string; source: string; source_url?: string; status: string; report: unknown; report_hash: string | null; created_at: string; updated_at: string; decision: unknown; execution_report: unknown; error?: string | null };
+type Task = { priority?: TaskPriority; source_ref?: string; id: string; title: string; source: string; source_url?: string; status: string; report: unknown; report_hash: string | null; created_at: string; updated_at: string; decision: unknown; execution_report: unknown; error?: string | null };
 type Connector = { name: string; status: string; detail: string };
 type Capability = string | { text: string; active?: boolean };
 type Snapshot = { tasks: Task[]; connectors: Connector[]; capabilities: Capability[]; paused?: boolean };
@@ -17,7 +17,7 @@ const clock = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short',
 const when = (iso: string) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? '' : clock.format(date).replace(',', ' ·') + ' WIB'; };
 const WAITING = ['waiting_approval', 'awaiting_approval', 'pending_approval'];
 const ACTIVE = ['queued', 'analyzing', 'approved', 'executing', 'running'];
-const STATUS_WORDS: Record<string, string> = { queued: 'Queued', analyzing: 'Writing report', approved: 'Approved, starting', executing: 'Following up', running: 'Running', completed: 'Done', rejected: 'Rejected', failed: 'Failed' };
+const STATUS_WORDS: Record<string, string> = { queued: 'Queued', analyzing: 'Writing report', approved: 'Accepted, queued', executing: 'Following up', running: 'Running', completed: 'Follow-up complete', rejected: 'Rejected', failed: 'Failed' };
 
 // Report text is untrusted model output: rendered as React text only (bold, italic, inline code). Never HTML.
 function inline(text: string): ReactNode[] {
@@ -45,7 +45,7 @@ function Report({ text }: { text: string }) {
 function decisionLine(value: unknown) {
   try {
     const record = typeof value === 'string' ? JSON.parse(value) : value as { decision?: string; by?: string; at?: string };
-    if (record?.decision) return `${record.decision === 'approve' ? 'Approved' : 'Rejected'}${record.by ? ` by ${record.by}` : ''}${record.at ? `, ${when(record.at)}` : ''}`;
+    if (record?.decision) return `${record.decision === 'approve' ? 'Accepted' : 'Rejected'}${record.by ? ` by ${record.by}` : ''}${record.at ? `, ${when(record.at)}` : ''}`;
   } catch { /* fall through to raw text */ }
   return plain(value);
 }
@@ -106,7 +106,7 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
   async function decide(task: Task, decision: 'approve' | 'reject') {
     const name = describeTask(task).title;
     if (!task.report_hash || !window.confirm(decision === 'approve'
-      ? `Approve the read-only follow-up for “${name}”?\n\nThis covers report ${task.report_hash.slice(0, 12)} only. No code, pull request or deploy will run.`
+      ? `Accept and run the read-only follow-up for “${name}”?\n\nThis covers report ${task.report_hash.slice(0, 12)} only. No code, pull request or deploy will run.`
       : `Reject “${name}”?\n\nThe agents stop here and nothing else runs for this task.`)) return;
     await mutate(`tasks/${encodeURIComponent(task.id)}/decision`, { decision, report_hash: task.report_hash });
   }
@@ -134,7 +134,7 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
     {status}
   </>;
 
-  const tasks = snapshot?.tasks ?? [];
+  const tasks = [...(snapshot?.tasks ?? [])].sort(comparePriority);
   const waiting = tasks.filter(task => WAITING.includes(task.status) && !!task.report_hash && !task.decision);
   const active = tasks.filter(task => ACTIVE.includes(task.status) && !waiting.includes(task));
   const finished = tasks.filter(task => !waiting.includes(task) && !active.includes(task));
@@ -145,28 +145,31 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
   const card = (task: Task) => {
     const view = describeTask(task), link = sourceLink(task.source_url), text = plain(task.report);
     const isWaiting = waiting.includes(task);
-    const brief = taskBrief(text);
+    const brief = taskBrief(text), priority = priorityView(task.priority);
     const summary = brief ? '' : text ? excerpt(text) : '';
     const meta = [...view.meta];
+    if (task.source_ref && !meta.includes(task.source_ref)) meta.push(task.source_ref);
     if (!isWaiting) meta.push(STATUS_WORDS[task.status] ?? task.status.replace(/_/g, ' '));
-    return <article key={task.id} className="ops-task" data-status={task.status}>
-      <p className="ops-task-meta"><span className="ops-task-tags">{meta.map((part, index) => <span key={index}>{part}</span>)}</span><time dateTime={task.created_at}>{when(task.created_at)}</time></p>
+    return <article key={task.id} className="ops-task" data-status={task.status} data-priority={priority.level}>
+      <p className="ops-task-meta"><span className="ops-task-tags"><strong>Source:</strong>{meta.map((part, index) => <span key={index}>{part}</span>)}</span><time dateTime={task.created_at}>{when(task.created_at)}</time></p>
+      <p className="ops-priority"><span className="ops-priority-badge" data-level={priority.level}>{priority.label}</span><span>{priority.basis}</span></p>
       <h3>{brief?.Judul || view.title}</h3>
+      <p className="ops-priority-reason">{priority.reason}</p>
       {brief && <dl className="ops-brief">{['Masalah', 'Target', 'Kondisi sekarang', 'Usulan'].filter(key => brief[key]).map(key => <div key={key}><dt>{key}</dt><dd>{brief[key]}</dd></div>)}</dl>}
       {summary && <p className="ops-task-summary">{summary}</p>}
       {task.error && <p className="ops-task-error">Last attempt failed: {task.error}</p>}
       {!text && <p className="ops-task-summary">The report is being written.</p>}
       {text && <details>
-        <summary>{isWaiting ? 'Read the report and decide' : 'Read the report'}</summary>
+        <summary>Read the report</summary>
         <Report text={brief ? text.replace(/^## Inti\s*\n[\s\S]*?(?=^## |$(?![\s\S]))/m, '') : text} />
-        {isWaiting && <div className="ops-decision">
+      </details>}
+      {isWaiting && <div className="ops-decision">
           <div className="ops-decision-actions">
-            <button className="ops-primary" disabled={busy} onClick={() => void decide(task, 'approve')}>Approve follow-up</button>
+            <button className="ops-primary" disabled={busy} onClick={() => void decide(task, 'approve')}>Accept</button>
             <button className="ops-quiet" disabled={busy} onClick={() => void decide(task, 'reject')}>Reject</button>
           </div>
-          <p className="ops-hint">Your decision applies to this version of the report only.</p>
+          <p className="ops-hint">Accept runs a read-only investigation and implementation plan for this report. No code changes or deploy. Reject stops this task.</p>
         </div>}
-      </details>}
       <p className="ops-task-foot">
         {link && <a href={link} target="_blank" rel="noopener noreferrer">{view.linkLabel}</a>}
         {task.decision != null && <span>{decisionLine(task.decision)}</span>}
@@ -192,6 +195,7 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
     </div>)}
     {status}
     {snapshot && <>
+      <p className="ops-order-note">Priority first. Items without enough evidence stay marked Needs triage.</p>
       {group('task-list-title', 'Waiting for you', waiting, 'Nothing is waiting for you. New reports appear here.')}
       {group('active-title', 'In progress', active)}
       {group('done-title', 'Decided', finished)}

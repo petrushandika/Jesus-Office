@@ -22,9 +22,13 @@ test('client has explicit confirmation, exact report hash, plain-text reports an
   assert.match(ui, /read-only/);
   assert.doesNotMatch(ui, /dangerouslySetInnerHTML|localStorage|OFFICE_OPERATOR_PASSWORD|OFFICE_OPS_TOKEN|OFFICE_SESSION_SECRET/);
 });
-test('decisions sit after the report, the queue is not a wall of identical buttons, copy is one language', () => {
+test('decisions are visible outside technical details with an explicit read-only scope', () => {
   const ui = source('./operations-panel.tsx');
-  assert.match(ui, /<details[\s\S]*Report[\s\S]*decide\(task, 'approve'\)/, 'approve lives inside the opened report');
+  assert.match(ui, /<\/details>}[\s\S]*decide\(task, 'approve'\)/);
+  assert.match(ui, />Accept<\/button>/);
+  assert.match(ui, /Accept runs a read-only investigation/);
+  assert.match(ui, /ops-priority/);
+  assert.match(ui, /Source:/);
   assert.doesNotMatch(ui, /Review and approve|Execution boundary|Reloading never approves|ops-list/);
   const server = readFileSync(new URL('../../../operations/server.py', import.meta.url), 'utf8');
   assert.doesNotMatch(server, /Intake otomatis|MENUNGGU|Belum aktif/, 'capabilities are written in the UI language');
@@ -34,7 +38,7 @@ test('operations omits System details while keeping intake and approval controls
   const ui = source('./operations-panel.tsx');
   assert.doesNotMatch(ui, /system-title|ops-connectors|ops-capabilities|What the agents can do|Where reports come from/);
   assert.match(ui, /Pause intake/);
-  assert.match(ui, /Approve follow-up/);
+  assert.match(ui, />Accept<\/button>/);
 });
 
 test('automatic intake has no manual task form', () => {

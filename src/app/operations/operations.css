@@ -72,7 +72,17 @@
 .ops-ref { font-variant-numeric: tabular-nums; }
 .ops-task-foot a { font-weight: 600; }
 
-/* Decision sits after the report, so approving follows reading. */
+.ops-task-tags strong { margin-right: 8px; font-weight: 600; }
+.ops-priority { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: #66685f; }
+.ops-priority-badge { display: inline-flex; border-radius: 6px; padding: 2px 8px; font-weight: 700; background: #edece5; color: #55584f; }
+.ops-priority-badge[data-level='urgent'] { background: #f5e1dc; color: #853425; }
+.ops-priority-badge[data-level='high'] { background: #f3e8cf; color: #72511b; }
+.ops-priority-badge[data-level='normal'] { background: #e5ebf3; color: #354f78; }
+.ops-priority-badge[data-level='untriaged'] { background: #eee8f3; color: #655074; }
+.ops-priority-reason { font-size: 13px; line-height: 1.5; color: #66685f; max-width: 75ch; }
+.ops-order-note { margin-bottom: 20px !important; font-size: 14px; color: #66685f; }
+
+/* Decisions remain visible after the brief; confirmation binds the report version. */
 .ops-decision { display: grid; gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1px solid #deded5; }
 .ops-decision-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .ops-decision .ops-hint { max-width: 60ch; }

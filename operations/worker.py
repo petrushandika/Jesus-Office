@@ -140,13 +140,14 @@ class Worker:
 
     def tick(self):
         if not self.store.paused():
-            task = self.store.claim('queued', 'analyzing')
+            # A continuous intake must not starve already approved follow-ups.
+            task = self.store.claim('approved', 'executing')
             if task:
-                self._analyze(task)
+                self._execute(task)
             else:
-                task = self.store.claim('approved', 'executing')
+                task = self.store.claim('queued', 'analyzing')
                 if task:
-                    self._execute(task)
+                    self._analyze(task)
         self.flush_mail()
 
     def _guard(self, task, back, fn):
