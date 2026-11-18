@@ -11,6 +11,7 @@ const LIMBS = ["leftLeg", "rightLeg", "leftArm", "rightArm"] as const;
 export function CityNpcs({ paused, inspectScene = false }: { paused: boolean; inspectScene?: boolean }) {
   const { gl } = useThree();
   const roots = useRef<(Group | null)[]>([]);
+  const appliedPoses = useRef<ReturnType<typeof sampleCityNpc>[]>([]);
   const clock = useMemo(() => createCityNpcClock(), []);
   useEffect(() => {
     // A hidden canvas may render no frames at all until it resumes.
@@ -51,8 +52,13 @@ export function CityNpcs({ paused, inspectScene = false }: { paused: boolean; in
         const root = roots.current[index];
         if (!root) return;
         const pose = sampleCityNpc(npc, elapsed);
+        appliedPoses.current[index] = pose;
         root.position.set(...pose.position);
         root.rotation.y = pose.heading;
+        root.userData.activity = pose.activity;
+        root.userData.destination = pose.destination;
+        root.userData.indoors = pose.indoors;
+        root.traverse(child => { if (child.name === 'citizen-accessory') child.visible = pose.activity !== 'bathing'; });
         for (const limb of LIMBS) {
           const joint = root.getObjectByName(limb);
           if (joint) joint.rotation.x = pose[limb];
@@ -70,6 +76,9 @@ export function CityNpcs({ paused, inspectScene = false }: { paused: boolean; in
         return [{
           key: CITY_NPCS[index].key,
           decorative: true,
+          activity: appliedPoses.current[index]?.activity,
+          destination: CITY_NPCS[index].destination,
+          indoors: appliedPoses.current[index]?.indoors,
           world: root.getWorldPosition(worldPoint).toArray(),
           quaternion: root.quaternion.toArray(),
           limbs: Object.fromEntries(LIMBS.map(name => {
@@ -103,14 +112,14 @@ export function CityNpcs({ paused, inspectScene = false }: { paused: boolean; in
             <group key={`arm-${side}`} name={side < 0 ? "leftArm" : "rightArm"} position={[side * 0.3, 1.39, 0]} rotation={[0, 0, side * 0.1]}>
               <mesh geometry={g.cylinder} material={material(npc.robe)} position={[0, -0.21, 0]} scale={[0.11, 0.43, 0.11]} />
               <mesh geometry={g.sphere} material={material(npc.skin)} position={[0, -0.47, 0]} scale={[0.075, 0.1, 0.075]} />
-              {side === 1 && npc.accessory === "basket" && <group position={[0.1, -0.63, 0.12]}>
+              {side === 1 && npc.accessory === "basket" && <group name="citizen-accessory" position={[0.1, -0.63, 0.12]}>
                 <mesh geometry={g.basket} material={material("#bc915a")} />
                 <mesh geometry={g.handle} material={material("#69503a")} position={[0, 0.14, 0]} />
               </group>}
-              {side === 1 && npc.accessory === "staff" && <mesh geometry={g.cylinder} material={material("#69503a")} position={[0.07, -0.33, 0.14]} scale={[0.028, 1.48, 0.028]} rotation={[0.1, 0, -0.05]} />}
+              {side === 1 && npc.accessory === "staff" && <mesh name="citizen-accessory" geometry={g.cylinder} material={material("#69503a")} position={[0.07, -0.33, 0.14]} scale={[0.028, 1.48, 0.028]} rotation={[0.1, 0, -0.05]} />}
             </group>
           ))}
-          {npc.accessory === "satchel" && <group>
+          {npc.accessory === "satchel" && <group name="citizen-accessory">
             <mesh geometry={g.box} material={material("#69503a")} position={[0.06, 1.08, 0.23]} scale={[0.055, 0.77, 0.045]} rotation={[0, 0, -0.55]} />
             <mesh geometry={g.box} material={material("#bc915a")} position={[-0.27, 0.76, 0.14]} scale={[0.25, 0.31, 0.18]} />
           </group>}
