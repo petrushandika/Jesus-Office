@@ -12,6 +12,7 @@ import { Disciple } from "./disciple";
 import { CityLandmarks, LANDMARK_PLACEMENTS } from "./city-landmarks";
 import { CityNpcs } from "./city-npcs";
 import { CITY_CORNERS, CITY_VIEW, fitCityDistance } from "@/lib/camera-fit";
+import { CITY_EXTENT, createSurroundingHomes } from "@/lib/city-fill";
 import { ROOMS, roomFor, type Room } from "@/lib/room-choreography";
 
 export type CameraAction = { kind: "zoom-in" | "zoom-out" | "reset" | "north" | "south" | "east" | "west"; serial: number };
@@ -352,6 +353,20 @@ function EnvironmentProbe({ paused }: { paused: boolean }) {
 }
 
 function CityDistricts({ animated }: { animated: boolean }) {
+  const surroundingHomes = useMemo(() => createSurroundingHomes(), []);
+  const surroundingLanes = useMemo(() => {
+    const blocks: {at:Point;size:Point;tint:number}[]=[];
+    for(let lane=-130.5;lane<=130.5;lane+=9){
+      if(Math.abs(lane)>40){
+        blocks.push({at:[lane,-0.022,0],size:[2.4,0.025,CITY_EXTENT*2],tint:1});
+        blocks.push({at:[0,-0.022,lane],size:[CITY_EXTENT*2,0.025,2.4],tint:2});
+      }else for(const side of [-1,1]){
+        blocks.push({at:[lane,-0.022,side*88],size:[2.4,0.025,94],tint:1});
+        blocks.push({at:[side*88,-0.022,lane],size:[94,0.025,2.4],tint:2});
+      }
+    }
+    return blocks;
+  }, []);
   const streets = useMemo(() => {
     const blocks: { at: Point; size: Point; tint: number }[] = [];
     // Continuous lanes extend beyond the central paving in all four directions.
@@ -383,6 +398,10 @@ function CityDistricts({ animated }: { animated: boolean }) {
     return result;
   }, []);
   return <group name="ancient-city-neighborhoods">
+    <group name="surrounding-city-districts">
+      <Stones blocks={surroundingLanes} />
+      <OuterHomes homes={surroundingHomes} />
+    </group>
     <Stones blocks={streets} />
     <OuterHomes homes={homes} />
     {/* Olive orchards follow the outer lanes; the central workspace stays open. */}

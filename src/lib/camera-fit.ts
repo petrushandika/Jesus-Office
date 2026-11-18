@@ -3,7 +3,12 @@ import {Vector3} from 'three';
 // Includes outer homes, orchards and every landmark; the ground is deliberately unbounded.
 export const CITY_CORNERS: [number,number,number][] = [-41,41].flatMap(x=>[0,10].flatMap(y=>[-34,34].map(z=>[x,y,z] as [number,number,number])));
 export const CITY_VIEW: [number,number,number] = [16.64525283848835,43.5,-34.56422367047748];
+// Street-scale home framing, not a miniature whole-town postcard. Portrait
+// crops the sides intentionally; orbit/pan/zoom still exposes every landmark.
 export function fitCityDistance(aspect:number) {
+ return Math.min(68, 56 + Math.max(0,aspect-1)*5);
+}
+export function fitCityOverviewDistance(aspect:number) {
  const back=new Vector3(...CITY_VIEW).normalize();
  const right=new Vector3().crossVectors(new Vector3(0,1,0),back).normalize();
  const up=new Vector3().crossVectors(back,right);
