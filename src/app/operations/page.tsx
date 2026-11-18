@@ -1,11 +1,16 @@
 import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { connection } from 'next/server';
+import Link from 'next/link';
+import { Quicksand } from 'next/font/google';
 import { SESSION_COOKIE, verifySession } from '../../lib/operations-auth';
 import OperationsPanel from './operations-panel';
 import './operations.css';
 
-export const metadata = { title: 'Private operations | Jesus Office', robots: { index: false, follow: false } };
+// Same typeface as Personal-Portfolio, scoped to the private desk only.
+const quicksand = Quicksand({ variable: '--font-quicksand', subsets: ['latin'], weight: ['400', '500', '600', '700'] });
+
+export const metadata = { title: 'Operations | Jesus Office', robots: { index: false, follow: false } };
 
 // Session is read at request time inside a Suspense boundary (Cache Components).
 async function Gate() {
@@ -16,5 +21,15 @@ async function Gate() {
 }
 
 export default function OperationsPage() {
-  return <main className="ops-operations"><div className="ops-container"><header><p className="ops-eyebrow">Jesus Office / Private area</p><h1>Operations desk</h1><p>Operator access only. Reports first, human decisions before execution.</p></header><Suspense fallback={<p>Checking session…</p>}><Gate /></Suspense></div></main>;
+  return <main className={`ops-page ${quicksand.variable}`}>
+    <div className="ops-shell">
+      <nav className="ops-crumbs" aria-label="Breadcrumb"><Link href="/">Office</Link><span aria-hidden="true">/</span><span>Operations</span></nav>
+      <header className="ops-hero">
+        <p className="ops-eyebrow">Private area</p>
+        <h1>Operations desk<span>.</span></h1>
+        <p className="ops-lede">Agents read GitHub, Jira and Techcare, write a report first, and wait for your decision before doing anything else.</p>
+      </header>
+      <Suspense fallback={<p className="ops-muted">Checking session…</p>}><Gate /></Suspense>
+    </div>
+  </main>;
 }
