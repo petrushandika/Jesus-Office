@@ -1,6 +1,7 @@
 """SQLite persistence: tasks, approvals, worker runs, audit events, email outbox."""
 import hashlib, json, os, secrets, sqlite3, threading, time
 from datetime import datetime, timezone
+from priority import ORDER, classify, source_ref
 
 MAX_ATTEMPTS = 3
 SCHEMA = """
@@ -101,14 +102,17 @@ class Store:
 
     def list_tasks(self, limit=200):
         rows = self._q('SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?', (limit,))
-        return [{k: r[k] for k in TASK_FIELDS} for r in rows]
+        return [dict({k: r[k] for k in TASK_FIELDS}, priority=classify(dict(r)),
+                     source_ref=source_ref(dict(r))) for r in rows]
 
     def claim(self, from_status, to_status):
         with self.lock:
-            row = self._one('SELECT id FROM tasks WHERE status=? AND not_before<=? ORDER BY created_at LIMIT 1',
-                            (from_status, time.time()))
-            if not row:
+            rows = self._q('SELECT * FROM tasks WHERE status=? AND not_before<=? ORDER BY created_at, id',
+                           (from_status, time.time()))
+            if not rows:
                 return None
+            row = min(rows, key=lambda r: ORDER[classify(dict(r))['level']])
+
             self.db.execute('UPDATE tasks SET status=?, attempts=attempts+1, updated_at=? WHERE id=? AND status=?',
                             (to_status, now_iso(), row['id'], from_status))
         self.event(row['id'], to_status)
