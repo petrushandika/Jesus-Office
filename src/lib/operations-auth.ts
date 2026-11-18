@@ -4,6 +4,19 @@ export const SESSION_COOKIE = '__Host-office_operator';
 const SESSION_SECONDS = 8 * 3600;
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
+export function normalizeOperatorEmail(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 4096) return '';
+  const email = value.trim().toLowerCase();
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
+}
+
+// Pass this key, not the raw password, to createSession/verifySession at operator boundaries.
+// An empty key fails closed; versioned encoding invalidates legacy password-only sessions.
+export function operatorSessionKey(email: string, password: string): string {
+  const normalized = normalizeOperatorEmail(email);
+  return normalized && password ? JSON.stringify(['office-operator-v1', normalized, password]) : '';
+}
+
 export function passwordMatches(candidate: string, expected: string): boolean {
   return timingSafeEqual(digest(candidate), digest(expected)) && expected.length > 0;
 }
