@@ -13,7 +13,7 @@ await page.mouse.move(500,400);await page.mouse.down({button:'right'});await pag
 const region=page.getByRole('region',{name:'Peta kota 3D'});
 for(const [width,height] of [[1440,900],[390,844],[844,390],[1920,1080]]){
  await page.setViewportSize({width,height});await page.waitForFunction(({width,height})=>{const r=document.querySelector('canvas').getBoundingClientRect();return r.width===width&&r.height===height;},{width,height});await region.focus();await page.keyboard.press('0');
- await page.waitForFunction(()=>{const p=JSON.parse(document.querySelector('canvas').dataset.mapCamera);return p.framing?.every(v=>Math.abs(v[0])<=0.94&&Math.abs(v[1])<=0.94&&v[2]>-1&&v[2]<1);});
+ await page.waitForFunction(()=>{const p=JSON.parse(document.querySelector('canvas').dataset.mapCamera);return Math.hypot(...p.position.map((n,i)=>n-p.target[i]))<=72 && Math.abs(p.zoom-1)<0.01;});
  const c=await camera(),rect=await page.locator('canvas').boundingBox();assert.equal(rect.width,width);assert.equal(rect.height,height);assert.equal(rect.x,0);assert.equal(rect.y,0);assert.equal((await page.locator('body').innerText()).trim(),'');screens.push({width,height,camera:c});await page.screenshot({path:`${out}/overview-${width}.png`,timeout:60000});
 }
 await page.setViewportSize({width:390,height:844});await region.focus();await page.keyboard.press('0');await page.waitForTimeout(1000);
@@ -28,5 +28,5 @@ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});asse
 const beforePan=await camera();await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:130,y:400,id:1},{x:230,y:440,id:2}]});
 for(let i=1;i<=5;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:130+i*9,y:400,id:1},{x:230+i*9,y:440,id:2}]});
 await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.notDeepEqual((await camera()).target,beforePan.target,'two fingers pan');
-assert.deepEqual(errors,[]);fs.writeFileSync(`${out}/result.json`,JSON.stringify({result:'PASS',url,screens,rotated,touched,errors},null,2));console.log('PASS left-drag + one-finger orbit; right-drag/two-finger pan; pinch; responsive whole-city fit all four sizes');
+assert.deepEqual(errors,[]);fs.writeFileSync(`${out}/result.json`,JSON.stringify({result:'PASS',url,screens,rotated,touched,errors},null,2));console.log('PASS left-drag + one-finger orbit; right-drag/two-finger pan; pinch; responsive close city framing all four sizes');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1});
