@@ -19,6 +19,13 @@ test('client has explicit confirmation, exact report hash, plain-text reports an
   assert.match(ui, /window\.confirm/);
   assert.match(ui, /report_hash: task.report_hash/);
   assert.match(ui, /10_000/);
-  assert.match(ui, /Read-only investigation/);
+  assert.match(ui, /read-only/);
   assert.doesNotMatch(ui, /dangerouslySetInnerHTML|localStorage|OFFICE_OPERATOR_PASSWORD|OFFICE_OPS_TOKEN|OFFICE_SESSION_SECRET/);
+});
+test('decisions sit after the report, the queue is not a wall of identical buttons, copy is one language', () => {
+  const ui = source('./operations-panel.tsx');
+  assert.match(ui, /<details[\s\S]*Report[\s\S]*decide\(task, 'approve'\)/, 'approve lives inside the opened report');
+  assert.doesNotMatch(ui, /Review and approve|Execution boundary|Reloading never approves|ops-list/);
+  const server = readFileSync(new URL('../../../operations/server.py', import.meta.url), 'utf8');
+  assert.doesNotMatch(server, /Intake otomatis|MENUNGGU|Belum aktif/, 'capabilities are written in the UI language');
 });

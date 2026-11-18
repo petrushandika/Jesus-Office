@@ -89,6 +89,17 @@ class SafetyTests(unittest.TestCase):
         doc = {'type': 'doc', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': 'AC 1'}]}]}
         self.assertIn('AC 1', adf_text(doc))
 
+    def test_adf_hard_breaks_and_cells_keep_words_apart(self):
+        doc = {'type': 'doc', 'content': [
+            {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Kondisi: buka BUNDLING PEMULA'}, {'type': 'hardBreak'},
+                                              {'type': 'text', 'text': 'Ketika: pilih video'}]},
+            {'type': 'table', 'content': [{'type': 'tableRow', 'content': [
+                {'type': 'tableCell', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': 'A'}]}]},
+                {'type': 'tableCell', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': 'B'}]}]}]}]}]}
+        text = adf_text(doc)
+        self.assertIn('PEMULA\nKetika', text)
+        self.assertNotIn('AB', text)
+
 
 class WorkerTests(unittest.TestCase):
     def setUp(self):

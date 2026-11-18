@@ -89,7 +89,7 @@ class Sources:
                 self._mark(name, True, detail)
             except Exception as e:  # connector failure is visible, never fabricated
                 code = getattr(e, 'code', None)
-                self._mark(name, False, 'gagal: %s%s' % (type(e).__name__, ' HTTP %s' % code if code else ''))
+                self._mark(name, False, 'Could not read: %s%s.' % (type(e).__name__, ' HTTP %s' % code if code else ''))
         return items
 
     def _poll_github(self):
@@ -112,8 +112,9 @@ class Sources:
                                   'title': clip('CI gagal: %s · %s · %s' % (repo, run.get('name') or 'workflow', run.get('head_branch')), 200),
                                   'description': 'Run %s berakhir %s pada branch %s.' % (run['id'], run.get('conclusion'), run.get('head_branch')),
                                   'source_url': run.get('html_url')})
-        return items[:PER_POLL * 2], '%d repo dipantau, %d run gagal terbaru%s' % (
-            len(repos), len(items), ', %d repo tidak bisa dibaca' % errors if errors else '')
+        return items[:PER_POLL * 2], '%d %s watched, %d recent failed %s%s.' % (
+            len(repos), 'repository' if len(repos) == 1 else 'repositories', len(items), 'run' if len(items) == 1 else 'runs',
+            ', %d could not be read' % errors if errors else '')
 
     def _poll_jira(self):
         if not self.jira_ok:
@@ -125,7 +126,7 @@ class Sources:
                   'description': 'Jira %s (%s, %s)' % (i['key'], (i['fields'].get('issuetype') or {}).get('name'),
                                                        (i['fields'].get('status') or {}).get('name')),
                   'source_url': '%s/browse/%s' % (self.jira_url, i['key'])} for i in issues]
-        return items, '%d tiket aktif terbaca' % len(issues)
+        return items, '%d open %s assigned to you.' % (len(issues), 'issue' if len(issues) == 1 else 'issues')
 
     def _poll_techcare(self):
         if not (self.tc_url and self.tc_token):
@@ -137,7 +138,7 @@ class Sources:
                   'title': clip('Techcare: %s' % t.get('title', ''), 200),
                   'description': 'Techcare %s, prioritas %s, status %s' % (t.get('category'), t.get('priority'), t.get('status')),
                   'source_url': None} for t in mine]
-        return items, '%d tiket terbuka untuk assignee yang dikonfigurasi' % len(mine)
+        return items, '%d open %s assigned to you.' % (len(mine), 'ticket' if len(mine) == 1 else 'tickets')
 
     # evidence ----------------------------------------------------------
     def _parts(self, task):

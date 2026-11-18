@@ -52,6 +52,8 @@ def adf_text(node, limit=6000):
         if isinstance(n, dict):
             if n.get('type') == 'text':
                 out.append(n.get('text', ''))
+            elif n.get('type') == 'hardBreak':
+                out.append('\n')
             for child in n.get('content', []) or []:
                 walk(child)
             if n.get('type') in ('paragraph', 'heading', 'listItem', 'tableRow'):
