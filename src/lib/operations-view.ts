@@ -23,7 +23,9 @@ export function describeTask(task: TaskLike): TaskView {
     }
     return { title, meta: ['Jira'], linkLabel: 'Open in Jira' };
   }
+  if (task.source === 'local') return { title, meta: ['Local project'], linkLabel: 'Evidence' };
   if (task.source === 'github') {
+    if (!title.startsWith('CI gagal:')) return { title, meta: ['GitHub'], linkLabel: 'Open on GitHub' };
     const parts = title.replace(/^CI gagal:\s*/, '').split(' · ');
     if (parts.length >= 3) {
       const [repo, name, branch] = [parts[0], parts.slice(1, -1).join(' · '), parts[parts.length - 1]];
@@ -86,4 +88,15 @@ export function excerpt(text: string) {
   const start = blocks.findIndex(block => block.type === 'heading' && /ringkasan|summary/i.test(block.text));
   const paragraph = blocks.slice(start + 1).find(block => block.type === 'paragraph') ?? blocks.find(block => block.type === 'paragraph');
   return paragraph && 'text' in paragraph ? plainText(paragraph.text) : '';
+}
+
+export function taskBrief(report: string): Record<string, string> | null {
+  const section = /^## Inti\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m.exec(report);
+  if (!section) return null;
+  const fields: Record<string, string> = {};
+  for (const line of section[1].split('\n')) {
+    const match = /^(Judul|Masalah|Target|Kondisi sekarang|Usulan):\s*(.+)$/.exec(line);
+    if (match) fields[match[1]] = plainText(match[2]);
+  }
+  return fields.Judul && fields.Masalah && fields.Target ? fields : null;
 }

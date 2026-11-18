@@ -162,3 +162,10 @@
   .ops-report-item[data-depth='2'] { padding-left: 28px; }
 }
 @media (prefers-reduced-motion: reduce) { .ops-page * { transition: none !important; } }
+
+.ops-brief { display: grid; gap: 8px; font-size: 15px; line-height: 1.6; max-width: 75ch; }
+.ops-brief > div { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 12px; }
+.ops-brief dt { font-weight: 600; }
+.ops-brief dd { color: #565b51; }
+[data-state='partial'] .ops-state::before { background: #b08a3e; }
+@media (max-width: 700px) { .ops-brief > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

@@ -28,8 +28,8 @@ test('routes fail closed, require exact origin, protect reads and issue secure c
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.equal((await logout(request('logout', {}, true, false))).status, 403);
   assert.match((await logout(request('logout', {}, true))).headers.get('set-cookie')!, /Max-Age=0/);
-  assert.equal((await add(request('tasks', { title: 'x', source: 'remote', description: 'y' }, true))).status, 400);
-  assert.equal((await add(request('tasks', { title: 'x', source: 'manual', description: 'y', source_url: 'javascript:alert(1)' }, true))).status, 400);
+  assert.equal((await add(request('tasks', { title: 'x', source: 'remote', description: 'y' }, true))).status, 405);
+  assert.equal((await add(request('tasks', { title: 'x', source: 'manual', description: 'y', source_url: 'javascript:alert(1)' }, true))).status, 405);
   assert.equal((await pause(request('pause', { paused: 'yes' }, true))).status, 400);
   assert.equal((await decide(request('tasks/x/decision', { decision: 'approve', report_hash: 'bad' }, true), { params: Promise.resolve({ id: 'x' }) })).status, 400);
   delete process.env.OFFICE_OPERATOR_PASSWORD;
