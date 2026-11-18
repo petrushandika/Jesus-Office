@@ -1,0 +1,31 @@
+.ops-operations { height: 100dvh; overflow-y: auto; background: #0b1220; color: #dbe5f3; font: 15px/1.6 system-ui, sans-serif; color-scheme: dark; }
+.ops-container { max-width: 1080px; margin: 0 auto; padding: 32px 20px 72px; }
+.ops-operations h1 { font-size: 30px; letter-spacing: -.025em; margin: 0; }
+.ops-operations h2 { font-size: 20px; margin: 0 0 12px; }
+.ops-operations h3 { font-size: 17px; margin: 12px 0; }
+.ops-operations h4 { margin: 18px 0 8px; }
+.ops-operations p { margin: 8px 0; }
+.ops-eyebrow { color: #8eb5dd; font-size: 12px; text-transform: uppercase; letter-spacing: .14em; }
+.ops-card { background: #121e30; border: 1px solid #2a3b52; border-radius: 10px; padding: 20px; margin: 18px 0; overflow-wrap: anywhere; }
+.ops-operations form { display: grid; gap: 10px; max-width: 700px; }
+.ops-operations label { font-weight: 600; }
+.ops-operations input, .ops-operations textarea { width: 100%; border: 1px solid #52637a; background: #0b1423; color: #edf4ff; border-radius: 5px; padding: 10px; box-sizing: border-box; font: inherit; }
+.ops-operations button { font: inherit; font-weight: 600; background: #24466b; border: 1px solid #5c83ac; color: #f5f9ff; border-radius: 5px; padding: 8px 14px; cursor: pointer; width: fit-content; }
+.ops-operations button:hover { background: #305a86; }
+.ops-operations button:disabled { opacity: .5; cursor: not-allowed; }
+.ops-operations :focus-visible { outline: 3px solid #9ed2ff; outline-offset: 4px; }
+.ops-operations a { color: #a9d5ff; text-decoration: underline; }
+.ops-operations pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.7 ui-monospace, monospace; background: #0b1423; border: 1px solid #26374e; border-radius: 5px; padding: 12px; max-height: 540px; overflow-y: auto; }
+.ops-operations code { font-size: 12px; overflow-wrap: anywhere; }
+.ops-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 16px 0; }
+.ops-toolbar span, .ops-muted { color: #a4b5ca; font-size: 13px; }
+.ops-task-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.ops-badge { font-size: 12px; border: 1px solid #537392; border-radius: 4px; padding: 2px 8px; }
+.ops-message { color: #ffd49c; min-height: 24px; }
+.ops-operations .ops-reject { background: #4b2730; border-color: #a46372; }
+@media (max-width: 600px) { .ops-container { padding: 20px 12px 48px; } .ops-card { padding: 15px; } .ops-operations h1 { font-size: 26px; } }
+.ops-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.ops-list li { background: #0b1423; border: 1px solid #26374e; border-radius: 6px; padding: 10px 12px; }
+.ops-ok { color: #9be3b0; border-color: #3f8a5a; }
+.ops-bad { color: #ffb4a8; border-color: #a4554a; }
+.ops-toolbar span { color: #c3d1e2; }
