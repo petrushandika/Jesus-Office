@@ -10,10 +10,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from store import Store  # noqa: E402
 
 CAPABILITIES = [
-    'Intake otomatis tiap 15 menit: GitHub Actions gagal (repo allowlist), Jira (JQL dikonfigurasi), Techcare (assignee dikonfigurasi)',
-    'Analisis + laporan awal oleh Astronacci 9Router, lalu MENUNGGU approval manusia',
-    'Setelah approve: investigasi lanjutan read-only (log job, komentar tiket) + rencana implementasi',
-    'Belum aktif: menulis kode, push/PR, update tiket, deploy (butuh executor terpisah + approval per tindakan)',
+    {'text': 'Every 15 minutes, read failed GitHub Actions runs in the allowed repositories, your open Jira issues and your Techcare tickets.', 'active': True},
+    {'text': 'Analyse each one with the Astronacci 9Router model and write a report. Work stops there until you decide.', 'active': True},
+    {'text': 'After approval, read job logs and ticket comments, then draft an implementation plan. Read-only.', 'active': True},
+    {'text': 'Not available yet: writing code, opening pull requests, updating tickets, deploying. Each will need its own approval.', 'active': False},
 ]
 TASK_ID = re.compile(r'^/tasks/([a-f0-9]{16})/decision$')
 MAX_BODY = 16384

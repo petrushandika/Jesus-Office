@@ -1,27 +1,55 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import Link from 'next/link';
+import { describeTask, excerpt, reportBlocks } from '../../lib/operations-view';
 
 type Task = { id: string; title: string; source: string; source_url?: string; status: string; report: unknown; report_hash: string | null; created_at: string; updated_at: string; decision: unknown; execution_report: unknown; error?: string | null };
-type Snapshot = { tasks: Task[]; connectors: { name: string; status: string; detail: string }[]; capabilities: unknown[]; paused?: boolean };
+type Connector = { name: string; status: string; detail: string };
+type Capability = string | { text: string; active?: boolean };
+type Snapshot = { tasks: Task[]; connectors: Connector[]; capabilities: Capability[]; paused?: boolean };
+
 const plain = (value: unknown) => typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value, null, 2);
 function sourceLink(value?: string) {
   try { const url = new URL(value ?? ''); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : null; } catch { return null; }
 }
+const clock = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
+const when = (iso: string) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? '' : clock.format(date).replace(',', ' ·') + ' WIB'; };
+const CONNECTOR_NAMES: Record<string, string> = { github: 'GitHub Actions', jira: 'Jira', techcare: 'Techcare', 'astronacci-9router': 'Astronacci 9Router', email: 'Email' };
+const CONNECTOR_STATES: Record<string, string> = { ok: 'Working', error: 'Failing', off: 'Not set up' };
+const WAITING = ['waiting_approval', 'awaiting_approval', 'pending_approval'];
+const ACTIVE = ['queued', 'analyzing', 'approved', 'executing', 'running'];
+const STATUS_WORDS: Record<string, string> = { queued: 'Queued', analyzing: 'Writing report', approved: 'Approved, starting', executing: 'Following up', running: 'Running', completed: 'Done', rejected: 'Rejected', failed: 'Failed' };
 
-// Render report Markdown as React elements (headings, bullets, **bold**). Never injects HTML.
-function inline(text: string) {
-  const code = (value: string) => value.split(/(`[^`]+`)/g).map((part, index) => part.startsWith('`') && part.endsWith('`') && part.length > 2 ? <code key={index}>{part.slice(1, -1)}</code> : part);
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') && part.length > 4 ? <strong key={index}>{code(part.slice(2, -2))}</strong> : <span key={index}>{code(part)}</span>);
+// Report text is untrusted model output: rendered as React text only (bold, italic, inline code). Never HTML.
+function inline(text: string): ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`|(?<![\w*])\*[^*\s][^*]*\*(?![\w*]))/g).map((part, index) => {
+    if (part.length > 4 && part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{inline(part.slice(2, -2))}</strong>;
+    if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) return <code key={index}>{part.slice(1, -1)}</code>;
+    if (part.length > 2 && part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
+    return <Fragment key={index}>{part}</Fragment>;
+  });
 }
 function Report({ text }: { text: string }) {
-  return <div className="ops-report">{text.split('\n').map((line, index) => {
-    const heading = /^(#{1,4})\s+(.*)$/.exec(line);
-    if (heading) return heading[1].length <= 1 ? <p key={index} className="ops-report-title">{inline(heading[2])}</p> : <p key={index} className="ops-report-heading">{inline(heading[2])}</p>;
-    const bullet = /^\s*(?:[-*]|\d+\.)\s+(.*)$/.exec(line);
-    if (bullet) return <p key={index} className="ops-report-bullet">{inline(bullet[1])}</p>;
-    return line.trim() ? <p key={index}>{inline(line)}</p> : null;
+  return <div className="ops-report">{reportBlocks(text).map((block, index) => {
+    switch (block.type) {
+      case 'heading': return block.level === 2 ? <h4 key={index}>{inline(block.text)}</h4> : <h5 key={index}>{inline(block.text)}</h5>;
+      case 'note': return <p key={index} className="ops-report-note">{inline(block.text)}</p>;
+      case 'label': return <p key={index} className="ops-report-label">{inline(block.text)}</p>;
+      case 'field': return <p key={index} className="ops-report-field"><strong>{inline(block.label)}:</strong>{' '}{inline(block.text)}</p>;
+      case 'item': return <p key={index} className="ops-report-item" data-depth={block.depth}><span aria-hidden="true">{block.marker || '–'}</span><span>{inline(block.text)}</span></p>;
+      case 'quote': return <blockquote key={index}>{inline(block.text)}</blockquote>;
+      case 'table': return <div key={index} className="ops-report-table"><table><thead><tr>{block.head.map((cell, c) => <th key={c}>{inline(cell)}</th>)}</tr></thead><tbody>{block.rows.map((row, r) => <tr key={r}>{row.map((cell, c) => <td key={c}>{inline(cell)}</td>)}</tr>)}</tbody></table></div>;
+      default: return <p key={index}>{inline(block.text)}</p>;
+    }
   })}</div>;
+}
+function decisionLine(value: unknown) {
+  try {
+    const record = typeof value === 'string' ? JSON.parse(value) : value as { decision?: string; by?: string; at?: string };
+    if (record?.decision) return `${record.decision === 'approve' ? 'Approved' : 'Rejected'}${record.by ? ` by ${record.by}` : ''}${record.at ? `, ${when(record.at)}` : ''}`;
+  } catch { /* fall through to raw text */ }
+  return plain(value);
 }
 
 export default function OperationsPanel({ authenticated }: { authenticated: boolean }) {
@@ -38,7 +66,7 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
       signal: AbortSignal.timeout(15_000),
     });
     if (response.status === 401) { setSignedIn(false); setSnapshot(null); }
-    if (!response.ok) throw new Error(response.status === 409 ? 'Report changed or task no longer awaiting approval. Reload and review again.' : response.status === 429 ? 'Too many attempts. Try again later.' : 'Operation failed. Check access or service availability.');
+    if (!response.ok) throw new Error(response.status === 409 ? 'This report changed or was already decided. Read the latest version first.' : response.status === 429 ? 'Too many attempts. Wait a few minutes and try again.' : response.status === 401 ? 'Wrong password, or the session has ended.' : 'The operations service did not respond. Try again shortly.');
     return response.json();
   }, []);
   const reload = useCallback(async () => {
@@ -46,9 +74,9 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
     loading.current = true;
     try {
       const data = await request('tasks') as Snapshot;
-      if (!Array.isArray(data.tasks) || !Array.isArray(data.connectors) || !Array.isArray(data.capabilities)) throw new Error('Invalid service response.');
-      setSnapshot(data); setUpdated(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })); setMessage('');
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to reload.'); }
+      if (!Array.isArray(data.tasks) || !Array.isArray(data.connectors) || !Array.isArray(data.capabilities)) throw new Error('The operations service sent an unexpected response.');
+      setSnapshot(data); setUpdated(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).format(new Date())); setMessage('');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to refresh.'); }
     finally { loading.current = false; }
   }, [request]);
   useEffect(() => {
@@ -60,7 +88,7 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
   async function mutate(path: string, body: unknown) {
     setBusy(true); setMessage('');
     try { await request(path, body); await reload(); return true; }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Operation failed.'); return false; }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'That did not work.'); return false; }
     finally { setBusy(false); }
   }
   async function login(event: FormEvent<HTMLFormElement>) {
@@ -68,7 +96,13 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
     const password = String(new FormData(form).get('password') ?? '');
     form.reset(); setBusy(true); setMessage('');
     try { await request('login', { password }); setSignedIn(true); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Login failed.'); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'Sign in failed.'); }
+    finally { setBusy(false); }
+  }
+  async function logout() {
+    setBusy(true);
+    try { await request('logout', {}); setSnapshot(null); setSignedIn(false); setMessage(''); }
+    catch { setMessage('Sign out failed. Try again.'); }
     finally { setBusy(false); }
   }
   async function addTask(event: FormEvent<HTMLFormElement>) {
@@ -77,23 +111,133 @@ export default function OperationsPanel({ authenticated }: { authenticated: bool
     if (await mutate('tasks', { title: values.get('title'), description: values.get('description'), source: 'manual', ...(source_url ? { source_url } : {}) })) form.reset();
   }
   async function decide(task: Task, decision: 'approve' | 'reject') {
-    if (!task.report_hash || !window.confirm(`${decision === 'approve' ? 'Approve bounded read-only execution' : 'Reject task'}: ${task.title}?\n\nReport hash: ${task.report_hash}\nOnly this exact report is being decided. Coding and deployment are not supported.`)) return;
+    const name = describeTask(task).title;
+    if (!task.report_hash || !window.confirm(decision === 'approve'
+      ? `Approve the read-only follow-up for “${name}”?\n\nThis covers report ${task.report_hash.slice(0, 12)} only. No code, pull request or deploy will run.`
+      : `Reject “${name}”?\n\nThe agents stop here and nothing else runs for this task.`)) return;
     await mutate(`tasks/${encodeURIComponent(task.id)}/decision`, { decision, report_hash: task.report_hash });
   }
-  const awaitingCount = snapshot?.tasks.filter(task => task.status === 'awaiting_approval' && !task.decision).length ?? 0;
-  const statusClass = (status: string) => status === 'completed' ? 'ops-badge ops-ok' : status === 'failed' || status === 'rejected' ? 'ops-badge ops-bad' : status === 'awaiting_approval' ? 'ops-badge ops-wait' : 'ops-badge';
-  return <>
-    <p role="status" aria-live="polite" className="ops-message">{message}</p>
-    {!signedIn ? <section className="ops-section"><div className="ops-card"><h2>Operator sign in</h2><p className="ops-muted">Operator access only. A session lasts up to eight hours.</p><form onSubmit={login}><label htmlFor="operator-password">Password</label><input id="operator-password" name="password" type="password" autoComplete="current-password" maxLength={4096} required /><button className="ops-primary" disabled={busy} type="submit">{busy ? 'Signing in…' : 'Sign in'}</button></form></div></section> : <>
-      <div className="ops-toolbar"><button disabled={busy} onClick={() => void reload()}>Reload</button><button disabled={busy || typeof snapshot?.paused !== 'boolean'} onClick={() => void mutate('pause', { paused: !snapshot?.paused })}>{snapshot?.paused ? 'Resume intake' : 'Pause intake'}</button><button disabled={busy} onClick={async () => { setBusy(true); try { await request('logout', {}); setSnapshot(null); setSignedIn(false); } catch { setMessage('Logout failed. Try again.'); } finally { setBusy(false); } }}>Log out</button><span className="ops-status">{snapshot?.paused ? 'Intake paused' : snapshot?.paused === false ? 'Intake active' : 'Intake state unknown'} · {updated ? `Updated ${updated}` : 'Loading…'} · {awaitingCount} awaiting your decision</span></div>
-      <section className="ops-section" aria-labelledby="task-list-title"><p className="ops-eyebrow">Queue</p><h2 id="task-list-title">Tasks {snapshot ? `(${snapshot.tasks.length})` : ''}</h2>{snapshot?.tasks.length === 0 && <p className="ops-muted">No tasks yet.</p>}{snapshot?.tasks.map(task => {
-        const link = sourceLink(task.source_url);
-        const awaiting = ['waiting_approval', 'awaiting_approval', 'pending_approval'].includes(task.status) && !!task.report_hash && !task.decision;
-        return <article key={task.id} className="ops-card"><p className="ops-meta">{task.created_at.slice(0, 16).replace('T', ' ')} · {task.source}{link && <> · <a href={link} target="_blank" rel="noopener noreferrer">Open source</a></>}</p><div className="ops-task-heading"><h3>{task.title}</h3><span className={statusClass(task.status)}>{task.status.replace('_', ' ')}</span></div>{task.error && <p className="ops-message">Last error: {task.error}</p>}{task.report ? <details><summary>Read the report</summary><Report text={plain(task.report)} /></details> : <p className="ops-muted">Analysis in progress.</p>}<p className="ops-meta">Report <code title={task.report_hash || undefined}>{task.report_hash ? task.report_hash.slice(0, 12) : 'pending'}</code> · ID <code>{task.id}</code></p>{awaiting && <div className="ops-toolbar"><button className="ops-primary" disabled={busy} onClick={() => void decide(task, 'approve')}>Review and approve</button><button className="ops-reject" disabled={busy} onClick={() => void decide(task, 'reject')}>Review and reject</button></div>}{task.decision != null && <p className="ops-meta">Decision: {plain(task.decision)}</p>}{task.execution_report != null && task.execution_report !== '' && <details open><summary>Execution report</summary><Report text={plain(task.execution_report)} /></details>}</article>;
-      })}</section>
-      <section className="ops-section"><p className="ops-eyebrow">Manual</p><h2>Add a task</h2><div className="ops-card"><form onSubmit={addTask}><label htmlFor="task-title">Title</label><input id="task-title" name="title" maxLength={200} required /><label htmlFor="task-description">Investigation request</label><textarea id="task-description" name="description" rows={4} maxLength={12000} required /><label htmlFor="task-source-url">Source URL (optional, HTTP or HTTPS)</label><input id="task-source-url" name="source_url" type="url" maxLength={2048} /><button className="ops-primary" type="submit" disabled={busy}>Queue for analysis</button></form></div></section>
-      <section className="ops-section"><p className="ops-eyebrow">Sources</p><h2>Connectors</h2>{snapshot?.connectors.length ? <ul className="ops-list">{snapshot.connectors.map((connector, index) => <li key={index}><strong>{connector.name}</strong> <span className={connector.status === 'ok' ? 'ops-badge ops-ok' : 'ops-badge ops-bad'}>{connector.status}</span><p className="ops-muted">{connector.detail}</p></li>)}</ul> : <p className="ops-muted">No connector statuses available.</p>}</section>
-      <section className="ops-section"><p className="ops-eyebrow">Limits</p><h2>Execution boundary</h2><div className="ops-card"><p><strong>Read-only investigation</strong> is supported. Automatic analysis produces a report, then waits for explicit human approval before bounded read-only execution. Coding, arbitrary shell commands and deployment are unsupported or blocked. Reloading never approves work.</p><p className="ops-muted">Reports are delivered here first, and by email when the email connector shows ok. Opening an email link never approves anything.</p><h4>Current capabilities</h4>{snapshot?.capabilities.length ? <ul className="ops-list">{snapshot.capabilities.map((capability, index) => <li key={index}>{plain(capability)}</li>)}</ul> : <p className="ops-muted">No capabilities reported yet.</p>}</div></section>
-    </>}
+
+  const crumbs = (end?: ReactNode) => <nav className="ops-crumbs" aria-label="Breadcrumb"><Link href="/">Office</Link><span aria-hidden="true">/</span><span>Operations</span>{end}</nav>;
+  const hero = (lede: ReactNode, actions?: ReactNode) => <header className="ops-hero">
+    <p className="ops-eyebrow">Private</p>
+    <h1>Operations<span>.</span></h1>
+    <p className="ops-lede">{lede}</p>
+    {actions}
+  </header>;
+  const status = <p role="status" aria-live="polite" className="ops-message">{message}</p>;
+
+  if (!signedIn) return <>
+    {crumbs()}
+    {hero('Agents read GitHub, Jira and Techcare, write a report, then wait for you. Sign in to read and decide.')}
+    <form className="ops-signin" onSubmit={login}>
+      <label htmlFor="operator-password">Password</label>
+      <div className="ops-signin-row">
+        <input id="operator-password" name="password" type="password" autoComplete="current-password" maxLength={4096} required />
+        <button className="ops-primary" disabled={busy} type="submit">{busy ? 'Signing in…' : 'Sign in'}</button>
+      </div>
+      <p className="ops-hint">The session lasts up to eight hours on this device.</p>
+    </form>
+    {status}
   </>;
+
+  const tasks = snapshot?.tasks ?? [];
+  const waiting = tasks.filter(task => WAITING.includes(task.status) && !!task.report_hash && !task.decision);
+  const active = tasks.filter(task => ACTIVE.includes(task.status) && !waiting.includes(task));
+  const finished = tasks.filter(task => !waiting.includes(task) && !active.includes(task));
+  const lede = !snapshot ? 'Loading the queue…'
+    : waiting.length === 0 ? 'Nothing is waiting for you. New reports from GitHub, Jira and Techcare land here first.'
+    : `${waiting.length} report${waiting.length === 1 ? ' is' : 's are'} waiting for your decision. Nothing runs until you approve it.`;
+
+  const card = (task: Task) => {
+    const view = describeTask(task), link = sourceLink(task.source_url), text = plain(task.report);
+    const isWaiting = waiting.includes(task);
+    const summary = text ? excerpt(text) : '';
+    const meta = [...view.meta];
+    if (!isWaiting) meta.push(STATUS_WORDS[task.status] ?? task.status.replace(/_/g, ' '));
+    return <article key={task.id} className="ops-task" data-status={task.status}>
+      <p className="ops-task-meta"><span className="ops-task-tags">{meta.map((part, index) => <span key={index}>{part}</span>)}</span><time dateTime={task.created_at}>{when(task.created_at)}</time></p>
+      <h3>{view.title}</h3>
+      {summary && <p className="ops-task-summary">{summary}</p>}
+      {task.error && <p className="ops-task-error">Last attempt failed: {task.error}</p>}
+      {!text && <p className="ops-task-summary">The report is being written.</p>}
+      {text && <details>
+        <summary>{isWaiting ? 'Read the report and decide' : 'Read the report'}</summary>
+        <Report text={text} />
+        {isWaiting && <div className="ops-decision">
+          <div className="ops-decision-actions">
+            <button className="ops-primary" disabled={busy} onClick={() => void decide(task, 'approve')}>Approve follow-up</button>
+            <button className="ops-quiet" disabled={busy} onClick={() => void decide(task, 'reject')}>Reject</button>
+          </div>
+          <p className="ops-hint">Your decision applies to this version of the report only.</p>
+        </div>}
+      </details>}
+      <p className="ops-task-foot">
+        {link && <a href={link} target="_blank" rel="noopener noreferrer">{view.linkLabel}</a>}
+        {task.decision != null && <span>{decisionLine(task.decision)}</span>}
+        <span className="ops-ref" title={task.report_hash ? `Report ${task.report_hash}` : undefined}>Ref {task.id.slice(0, 8)}</span>
+      </p>
+      {task.execution_report != null && task.execution_report !== '' && <details open>
+        <summary>Read the follow-up report</summary>
+        <Report text={plain(task.execution_report)} />
+      </details>}
+    </article>;
+  };
+  const group = (id: string, title: string, items: Task[], empty?: string) => (items.length || empty) ? <section className="ops-section" aria-labelledby={id}>
+    <h2 id={id}>{title}{items.length > 0 && <span className="ops-count">{items.length}</span>}</h2>
+    {items.length ? <div className="ops-tasks">{items.map(card)}</div> : <p className="ops-empty">{empty}</p>}
+  </section> : null;
+
+  return <div data-tasks={snapshot ? tasks.length : undefined}>
+    {crumbs(<button className="ops-link ops-signout" disabled={busy} onClick={() => void logout()}>Sign out</button>)}
+    {hero(lede, <div className="ops-actions" data-paused={snapshot?.paused ? 'true' : 'false'}>
+      <span className="ops-intake">{!snapshot ? 'Connecting…' : snapshot.paused ? 'Intake paused' : 'Intake on, every 15 minutes'}</span>
+      {updated && <span>Updated {updated} WIB</span>}
+      <button className="ops-quiet ops-small" disabled={busy || typeof snapshot?.paused !== 'boolean'} onClick={() => void mutate('pause', { paused: !snapshot?.paused })}>{snapshot?.paused ? 'Resume intake' : 'Pause intake'}</button>
+    </div>)}
+    {status}
+    {snapshot && <>
+      {group('task-list-title', 'Waiting for you', waiting, 'Nothing is waiting for you. New reports appear here.')}
+      {group('active-title', 'In progress', active)}
+      {group('done-title', 'Decided', finished)}
+
+      <section className="ops-section ops-split" aria-labelledby="add-title">
+        <div>
+          <h2 id="add-title">Ask for an investigation</h2>
+          <p className="ops-side">The agents read the sources you mention and write a report. Nothing runs until you approve it.</p>
+        </div>
+        <form className="ops-form" onSubmit={addTask}>
+          <label htmlFor="task-title">Title</label>
+          <input id="task-title" name="title" maxLength={200} required />
+          <label htmlFor="task-description">What should they look into?</label>
+          <textarea id="task-description" name="description" rows={4} maxLength={12000} required />
+          <label htmlFor="task-source-url">Link <span>optional</span></label>
+          <input id="task-source-url" name="source_url" type="url" inputMode="url" placeholder="https://" maxLength={2048} />
+          <button className="ops-primary" type="submit" disabled={busy}>Queue for analysis</button>
+        </form>
+      </section>
+
+      <section className="ops-section ops-split" aria-labelledby="system-title">
+        <div>
+          <h2 id="system-title">System</h2>
+          <p className="ops-side">Where reports come from, and what the agents are allowed to do. Everything stays read-only until a separate approval exists for each action.</p>
+        </div>
+        <div>
+          <dl className="ops-connectors">
+            {snapshot.connectors.map((connector, index) => <div key={index} data-state={connector.status}>
+              <dt>{CONNECTOR_NAMES[connector.name] ?? connector.name}</dt>
+              <dd><span className="ops-state">{CONNECTOR_STATES[connector.status] ?? connector.status}</span>{connector.detail}</dd>
+            </div>)}
+          </dl>
+          {snapshot.capabilities.length > 0 && <h3 className="ops-subhead">What the agents can do</h3>}
+          {snapshot.capabilities.length > 0 && <ul className="ops-capabilities">
+            {snapshot.capabilities.map((capability, index) => {
+              const item = typeof capability === 'string' ? { text: capability, active: true } : capability;
+              return <li key={index} className={item.active === false ? 'ops-off' : undefined}>{item.text}</li>;
+            })}
+          </ul>}
+        </div>
+      </section>
+    </>}
+  </div>;
 }

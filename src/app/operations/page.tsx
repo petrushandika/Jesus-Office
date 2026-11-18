@@ -23,13 +23,7 @@ async function Gate() {
 export default function OperationsPage() {
   return <main className={`ops-page ${quicksand.variable}`}>
     <div className="ops-shell">
-      <nav className="ops-crumbs" aria-label="Breadcrumb"><Link href="/">Office</Link><span aria-hidden="true">/</span><span>Operations</span></nav>
-      <header className="ops-hero">
-        <p className="ops-eyebrow">Private area</p>
-        <h1>Operations desk<span>.</span></h1>
-        <p className="ops-lede">Agents read GitHub, Jira and Techcare, write a report first, and wait for your decision before doing anything else.</p>
-      </header>
-      <Suspense fallback={<p className="ops-muted">Checking session…</p>}><Gate /></Suspense>
+      <Suspense fallback={<><nav className="ops-crumbs" aria-label="Breadcrumb"><Link href="/">Office</Link><span aria-hidden="true">/</span><span>Operations</span></nav><header className="ops-hero"><p className="ops-eyebrow">Private</p><h1>Operations<span>.</span></h1></header></>}><Gate /></Suspense>
     </div>
   </main>;
 }

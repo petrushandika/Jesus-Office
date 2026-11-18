@@ -30,12 +30,14 @@ class Worker:
     def statuses(self):
         out = list(self.sources.statuses()) if hasattr(self.sources, 'statuses') else []
         out.append({'name': 'astronacci-9router', 'status': 'error' if 'llm' in self.errors else 'ok',
-                    'detail': self.errors.get('llm', 'model %s' % getattr(self.llm, 'model', '?'))})
+                    'detail': self.errors.get('llm', 'Writes the reports. Falls back to the next model when one hits its limit.')})
         mail = self.store.mail_summary()
-        out.append({'name': 'email', 'status': 'ok' if self.mailer.configured and not mail.get('failed') else 'error',
-                    'detail': ('terkirim %d, antre %d, gagal %d%s' % (mail.get('sent', 0), mail.get('pending', 0), mail.get('failed', 0),
-                               ' — ' + self.errors['mail'] if 'mail' in self.errors else ''))
-                    if self.mailer.configured else 'belum dikonfigurasi: laporan hanya tersedia di dashboard'})
+        if not self.mailer.configured:
+            out.append({'name': 'email', 'status': 'off', 'detail': 'Reports are only on this page until a mail account is connected.'})
+        else:
+            out.append({'name': 'email', 'status': 'error' if mail.get('failed') else 'ok',
+                        'detail': '%d sent, %d queued, %d failed%s' % (mail.get('sent', 0), mail.get('pending', 0), mail.get('failed', 0),
+                                                                        ' (%s)' % self.errors['mail'] if 'mail' in self.errors else '')})
         return out
 
     # intake -------------------------------------------------------------
