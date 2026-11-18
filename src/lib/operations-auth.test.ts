@@ -1,6 +1,23 @@
+import * as auth from './operations-auth.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { passwordMatches, createSession, verifySession, sameOrigin, sessionCookie, LoginLimiter, readJson } from './operations-auth.ts';
+
+test('operator session keys normalize email and invalidate changed identity and legacy sessions', () => {
+  assert.equal(typeof auth.operatorSessionKey, 'function');
+  const secret = 'test-session-secret-that-is-at-least-32';
+  const key = auth.operatorSessionKey(' Operator@Example.test ', 'password');
+  assert.equal(key, auth.operatorSessionKey('operator@example.test', 'password'));
+  const token = createSession(secret, key, 1000);
+  assert.equal(verifySession(token, secret, key, 1000), true);
+  assert.equal(verifySession(token, secret, auth.operatorSessionKey('other@example.test', 'password'), 1000), false);
+  assert.equal(verifySession(token, secret, auth.operatorSessionKey('operator@example.test', 'changed'), 1000), false);
+  assert.equal(verifySession(createSession(secret, 'password', 1000), secret, key, 1000), false);
+  for (const email of ['', '  ', 'not-email', 'a b@example.test', 'a@@example.test', 'a@localhost', 'x'.repeat(255) + '@example.test']) {
+    assert.equal(auth.operatorSessionKey(email, 'password'), '');
+  }
+  assert.equal(auth.operatorSessionKey('operator@example.test', ''), '');
+});
 
 test('password comparison rejects incorrect and missing secrets', () => {
   assert.equal(passwordMatches('operator', 'operator'), true);

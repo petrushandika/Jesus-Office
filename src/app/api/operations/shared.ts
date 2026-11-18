@@ -1,17 +1,17 @@
-import { SESSION_COOKIE, verifySession, sameOrigin, readJson } from '../../../lib/operations-auth.ts';
+import { SESSION_COOKIE, operatorSessionKey, verifySession, sameOrigin, readJson } from '../../../lib/operations-auth.ts';
 
 export function json(data: unknown, status = 200, headers: Record<string, string> = {}) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers } });
 }
 export const error = (status: number) => json({ error: status === 401 ? 'Authentication required.' : status === 429 ? 'Too many attempts. Try later.' : 'Operation unavailable or invalid request.' }, status);
 export function configured() {
-  return !!process.env.OFFICE_OPERATOR_PASSWORD && (process.env.OFFICE_SESSION_SECRET?.length ?? 0) >= 32;
+  return !!operatorSessionKey(process.env.OFFICE_OPERATOR_EMAIL ?? '', process.env.OFFICE_OPERATOR_PASSWORD ?? '') && (process.env.OFFICE_SESSION_SECRET?.length ?? 0) >= 32;
 }
 export function guard(request: Request, mutation = false): Response | null {
   if (!configured()) return error(503);
   if (mutation && !sameOrigin(request)) return error(403);
   const token = request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith(SESSION_COOKIE + '='))?.slice(SESSION_COOKIE.length + 1);
-  return verifySession(token, process.env.OFFICE_SESSION_SECRET!, process.env.OFFICE_OPERATOR_PASSWORD!) ? null : error(401);
+  return verifySession(token, process.env.OFFICE_SESSION_SECRET!, operatorSessionKey(process.env.OFFICE_OPERATOR_EMAIL!, process.env.OFFICE_OPERATOR_PASSWORD!)) ? null : error(401);
 }
 export { readJson };
 export const text = (value: unknown, max: number): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
