@@ -3,7 +3,7 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { CanvasTexture, Color, DoubleSide, MOUSE, TOUCH, Object3D, RepeatWrapping, Shape, Box3, Fog, Vector3, type Group, type InstancedMesh } from "three";
+import { BoxGeometry, BufferGeometry, CanvasTexture, Color, CylinderGeometry, ExtrudeGeometry, SphereGeometry, DoubleSide, MOUSE, TOUCH, Object3D, RepeatWrapping, Shape, Box3, Fog, Vector3, type Group, type InstancedMesh } from "three";
 import type { Agent } from "@/lib/agents";
 import { reconcileBindings } from "@/lib/agent-bindings";
 import { PERSONAS, type Persona } from "@/lib/personas";
@@ -13,6 +13,7 @@ import { CityLandmarks, LANDMARK_PLACEMENTS } from "./city-landmarks";
 import { CityNpcs } from "./city-npcs";
 import { CITY_CORNERS, CITY_VIEW, fitCityDistance } from "@/lib/camera-fit";
 import { CITY_EXTENT, createSurroundingHomes } from "@/lib/city-fill";
+import { MARKET_STALLS, ROOM_FINISHES, SHAPES, assignHomeKinds, buildHome, type HomeLot, type HomePart, type Lot, type Shape as PartShape } from "@/lib/city-homes";
 import { ROOMS, roomFor, type Room } from "@/lib/room-choreography";
 
 export type CameraAction = { kind: "zoom-in" | "zoom-out" | "reset" | "north" | "south" | "east" | "west"; serial: number };
@@ -185,7 +186,8 @@ function Breeze({ animated, phase = 0, water = false, children }: { animated: bo
 }
 
 function Olive({ at, animated }: { at: Point; animated: boolean }) {
-  return <group position={at}><Breeze animated={animated} phase={at[0] + at[2]}>
+  const seed = Math.abs(Math.sin(at[0] * 12.9 + at[2] * 78.2));
+  return <group position={at} rotation={[0, seed * Math.PI * 2, 0]} scale={0.8 + seed * 0.45}><Breeze animated={animated} phase={at[0] + at[2]}>
     <mesh position={[0, 1, 0]} rotation={[0, 0, 0.13]} castShadow><cylinderGeometry args={[0.075, 0.14, 2, 7]} /><meshStandardMaterial color="#77654c" roughness={1} /></mesh>
     {[-1, 1].map((s) => <group key={s} position={[s * 0.35, 1.65, 0]} rotation={[0, s, s * -0.5]}>
       <mesh castShadow><cylinderGeometry args={[0.035, 0.07, 1.1, 6]} /><meshStandardMaterial color="#77654c" roughness={1} /></mesh>
@@ -244,14 +246,32 @@ function Gateway() {
   </group>;
 }
 
-function Awning({ x, animated }: { x: number; animated: boolean }) {
+function Awning({ x, animated, cloth = ["#c8b38a", "#967b58"] }: { x: number; animated: boolean; cloth?: readonly string[] }) {
   return <group position={[x, 0, 5.9]}>
     {[-1, 1].map((s) => <Block key={s} at={[s * 1.35, 1.16, -0.5]} size={[0.075, 2.32, 0.075]} color="#73583b" />)}
     <Block at={[0, 2.33, -0.5]} size={[2.85, 0.09, 0.09]} color="#73583b" />
     <Breeze animated={animated} phase={x}>{Array.from({ length: 14 }, (_, i) => <mesh key={i} position={[-1.3 + i * 0.2, 2.49 + Math.sin(i * 0.9) * 0.018, 0.02]} rotation={[-0.22, 0, 0]} castShadow>
-      <boxGeometry args={[0.205, 0.035, 1.25]} /><meshStandardMaterial color={i % 4 === 0 ? "#967b58" : "#c8b38a"} roughness={1} side={DoubleSide} />
+      <boxGeometry args={[0.205, 0.035, 1.25]} /><meshStandardMaterial color={i % 3 === 0 ? cloth[1] : cloth[0]} roughness={1} side={DoubleSide} />
     </mesh>)}</Breeze>
   </group>;
+}
+
+type Goods = typeof MARKET_STALLS[number]["goods"];
+const BALL = new SphereGeometry(1, 8, 6), BAR = new BoxGeometry(1, 1, 1), CAN = new CylinderGeometry(1, 1, 1, 10);
+function Goods({ kind }: { kind: Goods }) {
+  const item = (key: string, geometry: BufferGeometry, at: Point, scale: Point, color: string) =>
+    <mesh key={key} geometry={geometry} position={at} scale={scale} castShadow><meshStandardMaterial color={color} roughness={1} /></mesh>;
+  const row = (n: number, f: (x: number, i: number) => React.ReactNode) => Array.from({ length: n }, (_, i) => f(-0.9 + i * 1.8 / (n - 1), i));
+  switch (kind) {
+    case "amphorae": return <>{[-0.8, 0, 0.8].map(x => <Amphora key={x} at={[x, 1.24, 0]} scale={0.48} />)}</>;
+    case "cloth": return <>{row(4, (x, i) => item(`c${i}`, BAR, [x, 1.24 + (i % 2 ? .09 : .06), 0], [.4, i % 2 ? .18 : .12, .55], ["#3f5a7d", "#a3453a", "#d7a23b", "#efe6d2"][i]))}</>;
+    case "produce": return <>{row(5, (x, i) => item(`p${i}`, BALL, [x, 1.36, (i % 2) * .15 - .07], [.16, .12, .16], ["#7c8a4a", "#c27650", "#d7a23b", "#7c8a4a", "#a3453a"][i]))}</>;
+    case "fish": return <>{item("tray", BAR, [0, 1.27, 0], [2.1, .06, .6], "#8b7150")}{row(6, (x, i) => item(`f${i}`, BALL, [x, 1.33, (i % 2) * .2 - .1], [.17, .045, .07], "#9fb0ae"))}</>;
+    case "bread": return <>{row(5, (x, i) => item(`b${i}`, BALL, [x, 1.32, 0], [.19, .09, .14], i % 2 ? "#c58b4f" : "#d8a868"))}</>;
+    case "herbs": return <>{row(4, (x, i) => <group key={i}>{item(`h${i}`, CAN, [x, 1.34, 0], [.14, .2, .14], "#a86e4a")}{item(`l${i}`, BALL, [x, 1.53, 0], [.17, .15, .17], i % 2 ? "#6f8456" : "#8ea06c")}</group>)}</>;
+    case "baskets": return <>{row(3, (x, i) => item(`k${i}`, CAN, [x, 1.38, 0], [.3, .28, .3], "#a99a62"))}</>;
+    case "lamps": return <>{row(6, (x, i) => item(`m${i}`, BALL, [x, 1.29, 0], [.13, .06, .09], "#b06d3e"))}</>;
+  }
 }
 
 function Well({ animated }: { animated: boolean }) {
@@ -272,40 +292,42 @@ function Well({ animated }: { animated: boolean }) {
   </group>;
 }
 
-const TIMBER = ["#69543a", "#453a2b", "#866a47"];
-function OuterHomes({ homes }: { homes: { x: number; z: number; width: number; height: number; depth: number }[] }) {
-  const { masonry, timber } = useMemo(() => {
-    const masonry: { at: Point; size: Point; tint?: number }[] = [];
-    const timber: { at: Point; size: Point; tint?: number }[] = [];
-    homes.forEach(({ x, z, width, height, depth }, index) => {
-      const rows = Math.ceil(height / 0.45);
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < 5; col++) masonry.push({
-          at: [x - width / 2 + (col + 0.5) * width / 5, (row + 0.5) * height / rows, z],
-          size: [width / 5 - 0.025, height / rows - 0.025, depth], tint: (index + row + col) % 5,
-        });
-      }
-      masonry.push({ at: [x, height + 0.08, z], size: [width + 0.2, 0.16, depth + 0.2], tint: 0 });
-      if (index % 3 === 0) {
-        // Set-back upper volume and roof terrace, rather than recolored boxes.
-        masonry.push({ at: [x + width * 0.18, height + 0.8, z + depth * 0.14], size: [width * 0.55, 1.4, depth * 0.6], tint: 3 });
-        masonry.push({ at: [x + width * 0.18, height + 1.55, z + depth * 0.14], size: [width * 0.6, 0.18, depth * 0.65], tint: 1 });
-      } else if (index % 3 === 1) {
-        for (const sign of [-1, 1]) masonry.push({ at: [x + sign * width * 0.46, height + 0.27, z], size: [0.18, 0.45, depth], tint: 2 });
-        for (let step = 0; step < 7; step++) masonry.push({ at: [x + width / 2 + 0.5, (step + 1) * height / 14, z - depth / 2 + step * depth / 7], size: [0.85, (step + 1) * height / 7, depth / 7 + 0.02], tint: 3 });
-      } else {
-        for (const side of [-1, 1]) timber.push({ at: [x + side * width * 0.3, height + 0.55, z], size: [0.12, 1, depth * 0.7], tint: 0 });
-        for (let beam = 0; beam < 5; beam++) timber.push({ at: [x, height + 1.1, z + (beam - 2) * depth * 0.17], size: [width * 0.8, 0.12, 0.13], tint: 2 });
-      }
-      for (const face of [-1, 1]) {
-        timber.push({ at: [x - width * 0.2, 0.85, z + face * (depth / 2 + 0.035)], size: [0.8, 1.7, 0.07], tint: 1 });
-        timber.push({ at: [x + width * 0.25, height * 0.67, z + face * (depth / 2 + 0.04)], size: [0.65, 0.65, 0.08], tint: 1 });
-        for (const offset of [-0.3, 0.3]) timber.push({ at: [x + width * offset, height - 0.1, z + face * (depth / 2 + 0.1)], size: [0.13, 0.13, 0.4], tint: 0 });
-      }
+// Unit-box-sized primitives; instance scale maps each to its authored footprint.
+const gableShape = new Shape();
+gableShape.moveTo(-.5, -.5); gableShape.lineTo(.5, -.5); gableShape.lineTo(0, .5); gableShape.closePath();
+const gableZ = new ExtrudeGeometry(gableShape, { depth: 1, bevelEnabled: false }).translate(0, 0, -.5);
+const vaultX = new CylinderGeometry(.5, .5, 1, 16, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).scale(1, 2, 1).translate(0, -.5, 0);
+const HOME_GEOMETRY: Record<PartShape, BufferGeometry> = { box: new BoxGeometry(1, 1, 1), cylinder: new CylinderGeometry(.5, .5, 1, 14),
+  sphere: new SphereGeometry(.5, 12, 8), "gable-z": gableZ, "gable-x": gableZ.clone().rotateY(Math.PI / 2),
+  "vault-x": vaultX, "vault-z": vaultX.clone().rotateY(Math.PI / 2) };
+// Fourteen building programs share three instanced draw calls per district.
+function HomeBatch({ parts, shape }: { parts: HomePart[]; shape: PartShape }) {
+  const ref = useRef<InstancedMesh>(null);
+  const relief = useContext(StoneRelief);
+  useEffect(() => {
+    if (!ref.current) return;
+    const dummy = new Object3D(), color = new Color();
+    parts.forEach(({ at, size, color: tint }, i) => {
+      dummy.position.set(...at); dummy.scale.set(...size); dummy.updateMatrix();
+      ref.current!.setMatrixAt(i, dummy.matrix); ref.current!.setColorAt(i, color.set(tint));
     });
-    return { masonry, timber };
+    ref.current.instanceMatrix.needsUpdate = true;
+    if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true;
+    ref.current.computeBoundingSphere();
+  }, [parts]);
+  if (!parts.length) return null;
+  return <instancedMesh ref={ref} args={[HOME_GEOMETRY[shape], undefined, parts.length]} castShadow receiveShadow>
+    <meshStandardMaterial roughness={0.93} bumpMap={relief} bumpScale={0.03} />
+  </instancedMesh>;
+}
+function OuterHomes({ homes }: { homes: HomeLot[] }) {
+  const batches = useMemo(() => {
+    const parts = homes.flatMap(buildHome);
+    return SHAPES.map(shape => ({ shape, parts: parts.filter(p => p.shape === shape) }));
   }, [homes]);
-  return <group name="instanced-city-homes"><Stones blocks={masonry} /><Stones blocks={timber} palette={TIMBER} /></group>;
+  return <group name="instanced-city-homes" userData={{ kinds: new Set(homes.map(h => h.kind)).size }}>
+    {batches.map(b => <HomeBatch key={b.shape} shape={b.shape} parts={b.parts} />)}
+  </group>;
 }
 
 function EnvironmentProbe({ paused }: { paused: boolean }) {
@@ -353,16 +375,16 @@ function EnvironmentProbe({ paused }: { paused: boolean }) {
 }
 
 function CityDistricts({ animated }: { animated: boolean }) {
-  const surroundingHomes = useMemo(() => createSurroundingHomes(), []);
+
   const surroundingLanes = useMemo(() => {
     const blocks: {at:Point;size:Point;tint:number}[]=[];
     for(let lane=-130.5;lane<=130.5;lane+=9){
       if(Math.abs(lane)>40){
         blocks.push({at:[lane,-0.022,0],size:[2.4,0.025,CITY_EXTENT*2],tint:1});
-        blocks.push({at:[0,-0.022,lane],size:[CITY_EXTENT*2,0.025,2.4],tint:2});
+        blocks.push({at:[0,-0.018,lane],size:[CITY_EXTENT*2,0.025,2.4],tint:2});
       }else for(const side of [-1,1]){
         blocks.push({at:[lane,-0.022,side*88],size:[2.4,0.025,94],tint:1});
-        blocks.push({at:[side*88,-0.022,lane],size:[94,0.025,2.4],tint:2});
+        blocks.push({at:[side*88,-0.018,lane],size:[94,0.025,2.4],tint:2});
       }
     }
     return blocks;
@@ -385,7 +407,7 @@ function CityDistricts({ animated }: { animated: boolean }) {
     return blocks;
   }, []);
   const homes = useMemo(() => {
-    const result: { x: number; z: number; width: number; depth: number; height: number }[] = [];
+    const result: Lot[] = [];
     for (const z of [-27, -17, -6, 5, 16, 27]) {
       for (const x of [-28, -16, -5, 5, 16, 28]) {
         if (Math.abs(z) < 12 && Math.abs(x) < 12) continue;
@@ -395,23 +417,25 @@ function CityDistricts({ animated }: { animated: boolean }) {
           depth: 3 + Math.abs(Math.cos(z)) * 1.3, height: z < 0 ? 1.8 + Math.abs(Math.sin(x + z)) * 0.8 : 2.5 + Math.abs(Math.sin(x + z)) * 1.8 });
       }
     }
-    return result;
+    return assignHomeKinds([...result, ...createSurroundingHomes()]);
   }, []);
   return <group name="ancient-city-neighborhoods">
     <group name="surrounding-city-districts">
       <Stones blocks={surroundingLanes} />
-      <OuterHomes homes={surroundingHomes} />
     </group>
     <Stones blocks={streets} />
     <OuterHomes homes={homes} />
     {/* Olive orchards follow the outer lanes; the central workspace stays open. */}
     {[-1, 1].flatMap((side) => Array.from({ length: 12 }, (_, i) => <Olive key={`${side}:${i}`}
       at={[side * (33 + (i % 2) * 4), 0, -25 + Math.floor(i / 2) * 9]} animated={animated} />))}
-    {[-1, 1].flatMap((side) => [-8, 0, 8, 16].map((z) => <group key={`${side}:${z}`} position={[side * 14, 0, z - 5.9]}>
-      <Awning x={0} animated={animated} />
-      <Block at={[0, 0.62, 5.9]} size={[2.5, 1.24, 0.75]} color="#9b7750" />
-      {[-0.8, 0, 0.8].map((x) => <Amphora key={x} at={[x, 1.24, 5.9]} scale={0.48} />)}
-    </group>))}
+    {MARKET_STALLS.map((stall, i) => {
+      const side = i < 4 ? -1 : 1, z = [-8, 0, 8, 16][i % 4];
+      return <group key={stall.goods} position={[side * 14, 0, z - 5.9]}>
+        <Awning x={0} animated={animated} cloth={stall.awning} />
+        <Block at={[0, 0.62, 5.9]} size={[2.5, 1.24, 0.75]} color={["#9b7750", "#8a6a48", "#a7845a", "#7d6347"][i % 4]} />
+        <group position={[0, 0, 5.9]}><Goods kind={stall.goods} /></group>
+      </group>;
+    })}
 
   </group>;
 }
@@ -460,7 +484,7 @@ function Courtyard({ animated }: { animated: boolean }) {
     {/* Low peripheral houses leave the central 12 m completely unobstructed. */}
     <House x={-8.1} z={3.55} width={1.65} height={1.65} depth={4.8} />
     <House x={8.1} z={3.55} width={1.65} height={1.85} depth={4.8} />
-    <Awning x={-4.7} animated={animated} /><Awning x={4.7} animated={animated} />
+    <Awning x={-4.7} animated={animated} cloth={["#d9cdb5", "#6e3a3e"]} /><Awning x={4.7} animated={animated} cloth={["#e2d5b6", "#4f8a83"]} />
     {Array.from({ length: 6 }, (_, i) => <Block key={i} at={[6.9, (i + 1) * 0.15, 5.25 + i * 0.25]} size={[0.75, (i + 1) * 0.3, 0.3]} color={STONE[i % 5]} />)}
     <Olive at={[-7.1, 0, -5.8]} animated={animated} /><Olive at={[7.1, 0, -5.7]} animated={animated} />
     <Amphora at={[6.4, 0, 5.8]} /><Amphora at={[-6.3, 0, 5.7]} scale={0.85} /><Amphora at={[7.2, 0, 0.4]} scale={1.1} />
@@ -547,7 +571,7 @@ function WorkRoom({ room, index }: { room: Room; index: number }) {
     <Block at={[0, 0.005, 0]} size={[5.6, 0.07, 5]} color={room.tint} />
     {/* Open roofs and stepped-height walls keep rooms readable from both orbit sides.
         Masonry stops at the original 1.8m doorway: circulation is unchanged. */}
-    <Stones blocks={walls} />
+    <Stones blocks={walls} palette={ROOM_FINISHES[index]} />
     <Block at={[0, 1.94, side * 2.5]} size={[5.82, 0.1, 0.36]} color="#bca783" />
     {[-1, 1].map(s => <group key={s}>
       <Block at={[s * 2.8, 1.56, 0]} size={[0.34, 0.1, 5]} color="#c4b08c" />
